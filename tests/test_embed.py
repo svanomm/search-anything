@@ -153,7 +153,7 @@ class TestRenderPageImage:
         _, path = render_page_image(pdf, 0, images_dir=images_dir)
         assert path.exists()
         assert path.parent == images_dir
-        assert path.name == "page_0.png"
+        assert path.name == "page_1.png"
 
     def test_creates_images_dir_if_missing(self, tmp_path):
         pdf = _make_pdf(tmp_path / "r4.pdf")
@@ -197,7 +197,7 @@ class TestRenderPageImage:
         pdf = _make_pdf(tmp_path / "r10.pdf", num_pages=3)
         images_dir = tmp_path / "images"
         _, path = render_page_image(pdf, 2, images_dir=images_dir)
-        assert path.name == "page_2.png"
+        assert path.name == "page_3.png"
 
     def test_page_idx_out_of_range_raises(self, tmp_path):
         pdf = _make_pdf(tmp_path / "r11.pdf", num_pages=1)
@@ -490,7 +490,7 @@ class TestEmbedAllPdfs:
 
         image_cache = Path(results[0]["metadata"]["image_cache_path"])
         assert image_cache.exists()
-        assert image_cache.name == "page_0.png"
+        assert image_cache.name == "page_1.png"
 
     @patch("vlmembed.store.get_collection")
     @patch("vlmembed.store.page_exists")

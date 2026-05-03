@@ -48,6 +48,7 @@ def _ns(**kwargs) -> argparse.Namespace:
         "dimensions": None,
         "max_workers": None,
         "max_retries": None,
+        "yes": False,
         "port": 7860,
     }
     defaults.update(kwargs)
@@ -146,6 +147,7 @@ class TestBuildParser:
             "--dimensions", "512",
             "--max-workers", "2",
             "--max-retries", "1",
+            "--yes",
         ])
         assert args.api_key == "key123"
         assert args.model == "mymodel"
@@ -154,6 +156,7 @@ class TestBuildParser:
         assert args.dimensions == 512
         assert args.max_workers == 2
         assert args.max_retries == 1
+        assert args.yes is True
 
     def test_embed_dpi_is_int(self):
         args = self.parser.parse_args(["embed", "--dpi", "300"])
@@ -242,13 +245,31 @@ class TestCmdEmbed:
     """Tests for the embed subcommand; embed_all_pdfs is always mocked."""
 
     _PATCH = "vlmembed.embed.embed_all_pdfs"
+    _EST_PATCH = "vlmembed.cli._estimate_pending_embedding_cost"
 
-    def _run(self, args: argparse.Namespace, env: dict | None = None):
+    _ESTIMATE_RETURN = {
+        "per_file": {"a.pdf": 3},
+        "pages": 3,
+        "tokens_per_page": 58593,
+        "total_tokens": 175779,
+        "estimated_usd": 0.079,
+    }
+
+    def _run(
+        self,
+        args: argparse.Namespace,
+        env: dict | None = None,
+        estimate_return: dict | None = None,
+        prompt_response: str = "y",
+    ):
         env = env or {}
-        with patch(self._PATCH, return_value=[]) as mock_fn:
-            with patch.dict(os.environ, env, clear=False):
-                with patch("dotenv.load_dotenv"):
-                    result = cmd_embed(args)
+        estimate_return = estimate_return or self._ESTIMATE_RETURN
+        with patch(self._EST_PATCH, return_value=estimate_return):
+            with patch(self._PATCH, return_value=[]) as mock_fn:
+                with patch.dict(os.environ, env, clear=False):
+                    with patch("dotenv.load_dotenv"):
+                        with patch("builtins.input", return_value=prompt_response):
+                            result = cmd_embed(args)
         return result, mock_fn
 
     def test_returns_zero(self, tmp_path):
@@ -398,6 +419,36 @@ class TestCmdEmbed:
         pos, _ = mock_fn.call_args
         assert pos[0] == tmp_path / "d"
         assert pos[1] == tmp_path / "e"
+
+    def test_cancelled_when_user_declines_confirmation(self):
+        args = _ns(yes=False)
+        rc, mock_fn = self._run(args, prompt_response="n")
+        assert rc == 0
+        mock_fn.assert_not_called()
+
+    def test_yes_flag_skips_confirmation_prompt(self):
+        args = _ns(yes=True)
+        with patch(self._EST_PATCH, return_value=self._ESTIMATE_RETURN):
+            with patch(self._PATCH, return_value=[]) as mock_fn:
+                with patch("dotenv.load_dotenv"):
+                    with patch("builtins.input") as mock_input:
+                        rc = cmd_embed(args)
+        assert rc == 0
+        mock_input.assert_not_called()
+        mock_fn.assert_called_once()
+
+    def test_returns_zero_when_no_pending_pages(self):
+        args = _ns(yes=False)
+        estimate_return = {
+            "per_file": {},
+            "pages": 0,
+            "tokens_per_page": 58593,
+            "total_tokens": 0,
+            "estimated_usd": 0.0,
+        }
+        rc, mock_fn = self._run(args, estimate_return=estimate_return)
+        assert rc == 0
+        mock_fn.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

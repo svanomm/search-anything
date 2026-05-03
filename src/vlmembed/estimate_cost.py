@@ -66,6 +66,33 @@ def estimate_tokens_per_page(dpi: int = DEFAULT_DPI) -> int:
     return max(1, pixels // _PIXELS_PER_TOKEN)
 
 
+def estimate_cost_from_page_counts(
+    per_file: dict[str, int],
+    *,
+    dpi: int = DEFAULT_DPI,
+) -> dict:
+    """Estimate embedding cost from a ``{filename: page_count}`` mapping.
+
+    Args:
+        per_file: Mapping of filename to page count.
+        dpi: Render resolution used when calculating token estimates.
+
+    Returns:
+        Dict with the same shape as :func:`estimate_cost`.
+    """
+    total_pages = sum(per_file.values())
+    tokens_per_page = estimate_tokens_per_page(dpi)
+    total_tokens = total_pages * tokens_per_page
+    estimated_usd = total_tokens * _PRICE_PER_M_TOKENS / 1_000_000
+    return {
+        "per_file": per_file,
+        "pages": total_pages,
+        "tokens_per_page": tokens_per_page,
+        "total_tokens": total_tokens,
+        "estimated_usd": estimated_usd,
+    }
+
+
 def estimate_cost(
     docs_dir: Path = DEFAULT_DOCS_DIR,
     dpi: int = DEFAULT_DPI,
@@ -86,14 +113,4 @@ def estimate_cost(
         * ``estimated_usd`` — cost estimate in US dollars.
     """
     per_file = count_pdf_pages(docs_dir)
-    total_pages = sum(per_file.values())
-    tokens_per_page = estimate_tokens_per_page(dpi)
-    total_tokens = total_pages * tokens_per_page
-    estimated_usd = total_tokens * _PRICE_PER_M_TOKENS / 1_000_000
-    return {
-        "per_file": per_file,
-        "pages": total_pages,
-        "tokens_per_page": tokens_per_page,
-        "total_tokens": total_tokens,
-        "estimated_usd": estimated_usd,
-    }
+    return estimate_cost_from_page_counts(per_file, dpi=dpi)

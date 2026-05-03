@@ -14,6 +14,7 @@ from vlmembed.estimate_cost import (
     _PRICE_PER_M_TOKENS,
     count_pdf_pages,
     estimate_cost,
+    estimate_cost_from_page_counts,
     estimate_tokens_per_page,
 )
 
@@ -190,3 +191,24 @@ class TestEstimateCost:
         from vlmembed.contract import DEFAULT_DOCS_DIR as _DEFAULT
 
         assert sig.parameters["docs_dir"].default == _DEFAULT
+
+
+# ---------------------------------------------------------------------------
+# estimate_cost_from_page_counts
+# ---------------------------------------------------------------------------
+
+
+class TestEstimateCostFromPageCounts:
+    def test_expected_shape_and_totals(self):
+        per_file = {"a.pdf": 2, "b.pdf": 3}
+        result = estimate_cost_from_page_counts(per_file, dpi=200)
+
+        assert result["per_file"] == per_file
+        assert result["pages"] == 5
+        assert result["total_tokens"] == result["pages"] * result["tokens_per_page"]
+
+    def test_empty_mapping_has_zero_pages_and_cost(self):
+        result = estimate_cost_from_page_counts({}, dpi=200)
+        assert result["pages"] == 0
+        assert result["total_tokens"] == 0
+        assert result["estimated_usd"] == 0.0

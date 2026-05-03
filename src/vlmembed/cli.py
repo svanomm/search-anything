@@ -83,6 +83,65 @@ def _print_path_status(label: str, path: Path, exists: bool) -> None:
     print(f"  {tick} {_DIM}{label}:{_R} {path}")
 
 
+def _prompt_yes_no(prompt: str, *, default: bool = False) -> bool:
+    """Prompt for a yes/no answer and return the parsed boolean value."""
+    suffix = "Y/n" if default else "y/N"
+    while True:
+        try:
+            answer = input(f"{prompt} [{suffix}]: ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            return False
+
+        if not answer:
+            return default
+        if answer in {"y", "yes"}:
+            return True
+        if answer in {"n", "no"}:
+            return False
+
+        print(f"{_YELLOW}Please answer y or n.{_R}")
+
+
+def _estimate_pending_embedding_cost(
+    *,
+    docs_dir: Path,
+    embed_dir: Path,
+    dpi: int,
+) -> dict:
+    """Estimate cost only for pages that are not yet embedded."""
+    import fitz  # noqa: PLC0415
+
+    from vlmembed.embed import compute_doc_hash  # noqa: PLC0415
+    from vlmembed.estimate_cost import estimate_cost_from_page_counts  # noqa: PLC0415
+    from vlmembed.store import get_collection, page_exists  # noqa: PLC0415
+
+    if not docs_dir.exists():
+        raise FileNotFoundError(f"Docs directory not found: {docs_dir}")
+
+    pdf_files = sorted(docs_dir.glob("*.pdf"))
+    if not pdf_files:
+        return estimate_cost_from_page_counts({}, dpi=dpi)
+
+    collection = get_collection(embed_dir)
+    per_file: dict[str, int] = {}
+
+    for pdf_path in pdf_files:
+        doc_hash = compute_doc_hash(pdf_path)
+        with fitz.open(pdf_path) as doc:
+            page_count = len(doc)
+
+        pending_pages = 0
+        for page_idx in range(page_count):
+            page_id = f"{doc_hash}_{page_idx}"
+            if not page_exists(collection, page_id):
+                pending_pages += 1
+
+        if pending_pages > 0:
+            per_file[pdf_path.name] = pending_pages
+
+    return estimate_cost_from_page_counts(per_file, dpi=dpi)
+
+
 # ---------------------------------------------------------------------------
 # Subcommand: init
 # ---------------------------------------------------------------------------
@@ -132,6 +191,36 @@ def cmd_embed(args: argparse.Namespace) -> int:
 
     docs_dir = Path(args.docs_dir)
     embed_dir = Path(args.embed_dir)
+
+    print(f"\n{_BOLD}Estimating embedding cost for pending pages…{_R}\n")
+    estimate = _estimate_pending_embedding_cost(
+        docs_dir=docs_dir,
+        embed_dir=embed_dir,
+        dpi=dpi,
+    )
+
+    if not estimate["per_file"]:
+        print(f"  {_YELLOW}No new pages need embedding in {docs_dir}{_R}\n")
+        return 0
+
+    for filename, pages in estimate["per_file"].items():
+        print(f"  {_DIM}{filename}:{_R} {pages} pending page(s)")
+
+    print(f"\n  Pending pages:   {_BOLD}{estimate['pages']}{_R}")
+    print(f"  Tokens/page:     {_BOLD}{estimate['tokens_per_page']:,}{_R}")
+    print(f"  Total tokens:    {_BOLD}{estimate['total_tokens']:,}{_R}")
+    print(f"  Estimated cost:  {_BOLD}{_GREEN}${estimate['estimated_usd']:.4f}{_R}")
+    print(
+        f"\n  {_DIM}Disclaimer: estimate based on ~${0.2}/M tokens at {dpi} DPI "
+        f"(US Letter page size). Actual cost may vary.{_R}\n"
+    )
+
+    if not getattr(args, "yes", False) and not _prompt_yes_no(
+        "Proceed with embedding using the estimated cost above?",
+        default=False,
+    ):
+        print(f"\n{_YELLOW}Embedding cancelled.{_R}\n")
+        return 0
 
     print(f"\n{_BOLD}Embedding PDFs…{_R}\n")
     results = embed_all_pdfs(
@@ -250,6 +339,7 @@ def _interactive_menu() -> int:
                 dimensions=None,
                 max_workers=None,
                 max_retries=None,
+                yes=False,
             )
             cmd_embed(ns)
         elif choice == "3":
@@ -338,6 +428,12 @@ def _build_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         help=f"Retries per page (default: {DEFAULT_MAX_RETRIES}).",
+    )
+    p_embed.add_argument(
+        "-y",
+        "--yes",
+        action="store_true",
+        help="Skip confirmation prompt and proceed with embedding.",
     )
 
     # --- search ---

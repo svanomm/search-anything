@@ -93,7 +93,7 @@ class TestLoadImage:
     def test_returns_none_for_nonexistent_path(self):
         from vlmembed.search_app import _load_image
 
-        result = _load_image("/does/not/exist/page_0.png")
+        result = _load_image("/does/not/exist/page_1.png")
         assert result is None
 
     def test_returns_none_for_empty_string(self):
@@ -107,7 +107,7 @@ class TestLoadImage:
 
         from vlmembed.search_app import _load_image
 
-        img_path = tmp_path / "page_0.png"
+        img_path = tmp_path / "page_1.png"
         Image.new("RGB", (10, 10), color=(255, 0, 0)).save(str(img_path))
 
         result = _load_image(str(img_path))
@@ -141,7 +141,7 @@ class TestBuildGalleryItems:
 
         from vlmembed.search_app import _build_gallery_items
 
-        img_path = tmp_path / "page_0.png"
+        img_path = tmp_path / "page_1.png"
         Image.new("RGB", (10, 10)).save(str(img_path))
 
         results = [_make_result(image_cache_path=str(img_path))]
@@ -294,7 +294,7 @@ class TestLaunchSearchApp:
             dimensions=_DIM,
             port=7890,
         )
-        mock_launch.assert_called_once_with(server_port=7890)
+        mock_launch.assert_called_once_with(server_port=7890, inbrowser=True)
 
     @patch("vlmembed.search_app.gr.Blocks.launch")
     @patch("vlmembed.search_app.get_collection")

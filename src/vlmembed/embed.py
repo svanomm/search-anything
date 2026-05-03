@@ -124,10 +124,10 @@ def render_page_image(
     if images_dir is not None:
         images_dir = Path(images_dir)
         images_dir.mkdir(parents=True, exist_ok=True)
-        saved_path = images_dir / f"page_{page_idx}.{ext}"
+        saved_path = images_dir / f"page_{page_idx + 1}.{ext}"
         saved_path.write_bytes(image_bytes)
     else:
-        saved_path = Path(f"page_{page_idx}.{ext}")
+        saved_path = Path(f"page_{page_idx + 1}.{ext}")
 
     return base64_str, saved_path
 

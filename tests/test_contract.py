@@ -43,7 +43,7 @@ class TestDefaults:
         assert DEFAULT_MODEL == "google/gemini-embedding-2-preview"
 
     def test_dpi(self):
-        assert DEFAULT_DPI == 200
+        assert DEFAULT_DPI == 300
 
     def test_image_format(self):
         assert DEFAULT_IMAGE_FORMAT == "png"
