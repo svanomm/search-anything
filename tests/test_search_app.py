@@ -333,3 +333,133 @@ class TestLaunchSearchApp:
         launch_search_app(embed_dir=tmp_path, api_key="k", model="m", dimensions=_DIM)
         mock_dotenv.assert_called_once()
 
+
+# ---------------------------------------------------------------------------
+# Query embedding cache — make_search_fn with embed_dir
+# ---------------------------------------------------------------------------
+
+
+class TestQueryEmbeddingCache:
+    """Verify that make_search_fn skips the API when a cached embedding exists."""
+
+    @patch("vlmembed.search_app.embed_text_query", return_value=_FAKE_EMBEDDING)
+    @patch("vlmembed.search_app.search", return_value=[])
+    def test_embed_called_on_first_query(self, mock_search, mock_embed, tmp_path):
+        from vlmembed.search_app import make_search_fn
+
+        run_search = make_search_fn(
+            _mock_collection(count=5),
+            api_key="key",
+            model="m",
+            dimensions=_DIM,
+            embed_dir=tmp_path,
+        )
+        run_search("hello", 3)
+        mock_embed.assert_called_once()
+
+    @patch("vlmembed.search_app.embed_text_query", return_value=_FAKE_EMBEDDING)
+    @patch("vlmembed.search_app.search", return_value=[])
+    def test_embed_not_called_on_repeat_query(self, mock_search, mock_embed, tmp_path):
+        from vlmembed.search_app import make_search_fn
+
+        run_search = make_search_fn(
+            _mock_collection(count=5),
+            api_key="key",
+            model="m",
+            dimensions=_DIM,
+            embed_dir=tmp_path,
+        )
+        run_search("hello", 3)
+        run_search("hello", 3)
+        mock_embed.assert_called_once()  # only the first call hits the API
+
+    @patch("vlmembed.search_app.embed_text_query", return_value=_FAKE_EMBEDDING)
+    @patch("vlmembed.search_app.search", return_value=[])
+    def test_cache_is_case_insensitive(self, mock_search, mock_embed, tmp_path):
+        from vlmembed.search_app import make_search_fn
+
+        run_search = make_search_fn(
+            _mock_collection(count=5),
+            api_key="key",
+            model="m",
+            dimensions=_DIM,
+            embed_dir=tmp_path,
+        )
+        run_search("Hello", 3)
+        run_search("hello", 3)
+        mock_embed.assert_called_once()
+
+    @patch("vlmembed.search_app.embed_text_query", return_value=_FAKE_EMBEDDING)
+    @patch("vlmembed.search_app.search", return_value=[])
+    def test_cache_ignores_punctuation(self, mock_search, mock_embed, tmp_path):
+        from vlmembed.search_app import make_search_fn
+
+        run_search = make_search_fn(
+            _mock_collection(count=5),
+            api_key="key",
+            model="m",
+            dimensions=_DIM,
+            embed_dir=tmp_path,
+        )
+        run_search("cats!", 3)
+        run_search("cats", 3)
+        mock_embed.assert_called_once()
+
+    @patch("vlmembed.search_app.embed_text_query", return_value=_FAKE_EMBEDDING)
+    @patch("vlmembed.search_app.search", return_value=[])
+    def test_different_queries_each_call_api(self, mock_search, mock_embed, tmp_path):
+        from vlmembed.search_app import make_search_fn
+
+        run_search = make_search_fn(
+            _mock_collection(count=5),
+            api_key="key",
+            model="m",
+            dimensions=_DIM,
+            embed_dir=tmp_path,
+        )
+        run_search("hello", 3)
+        run_search("world", 3)
+        assert mock_embed.call_count == 2
+
+    @patch("vlmembed.search_app.embed_text_query", return_value=_FAKE_EMBEDDING)
+    @patch("vlmembed.search_app.search", return_value=[])
+    def test_no_embed_dir_disables_caching(self, mock_search, mock_embed, tmp_path):
+        from vlmembed.search_app import make_search_fn
+
+        run_search = make_search_fn(
+            _mock_collection(count=5),
+            api_key="key",
+            model="m",
+            dimensions=_DIM,
+            # embed_dir not provided
+        )
+        run_search("hello", 3)
+        run_search("hello", 3)
+        assert mock_embed.call_count == 2  # no cache → two API calls
+
+    @patch("vlmembed.search_app.embed_text_query", return_value=_FAKE_EMBEDDING)
+    @patch("vlmembed.search_app.search", return_value=[])
+    def test_cache_persists_across_search_fn_instances(self, mock_search, mock_embed, tmp_path):
+        from vlmembed.search_app import make_search_fn
+
+        # First instance populates the cache
+        run_search_1 = make_search_fn(
+            _mock_collection(count=5),
+            api_key="key",
+            model="m",
+            dimensions=_DIM,
+            embed_dir=tmp_path,
+        )
+        run_search_1("hello", 3)
+
+        # Second instance (simulates app restart) should read from disk cache
+        run_search_2 = make_search_fn(
+            _mock_collection(count=5),
+            api_key="key",
+            model="m",
+            dimensions=_DIM,
+            embed_dir=tmp_path,
+        )
+        run_search_2("hello", 3)
+        mock_embed.assert_called_once()  # only the very first call ever hits the API
+

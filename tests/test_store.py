@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import uuid
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -9,7 +10,17 @@ from unittest.mock import MagicMock, patch
 import chromadb
 import pytest
 
-from vlmembed.store import get_collection, page_exists, search, upsert_page
+from vlmembed.store import (
+    get_collection,
+    get_cached_embedding,
+    load_query_cache,
+    normalize_query,
+    page_exists,
+    save_query_cache,
+    search,
+    set_cached_embedding,
+    upsert_page,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -195,3 +206,111 @@ class TestSearch:
         results = search(col, _unit_vec(0), n_results=1)
         assert results[0]["metadata"] == meta
         assert results[0]["page_id"] == "doc1_7"
+
+
+# ---------------------------------------------------------------------------
+# normalize_query
+# ---------------------------------------------------------------------------
+
+
+class TestNormalizeQuery:
+    def test_lowercases(self):
+        assert normalize_query("Hello World") == "hello world"
+
+    def test_removes_punctuation(self):
+        assert normalize_query("cats!") == "cats"
+
+    def test_removes_all_punctuation_chars(self):
+        assert normalize_query("What's this? A test.") == "whats this a test"
+
+    def test_empty_string(self):
+        assert normalize_query("") == ""
+
+    def test_already_normalized(self):
+        assert normalize_query("hello world") == "hello world"
+
+    def test_equivalent_after_normalization(self):
+        assert normalize_query("Cats!") == normalize_query("cats")
+
+
+# ---------------------------------------------------------------------------
+# load_query_cache / save_query_cache
+# ---------------------------------------------------------------------------
+
+
+class TestQueryCachePersistence:
+    def test_load_returns_empty_dict_when_file_missing(self, tmp_path):
+        assert load_query_cache(tmp_path) == {}
+
+    def test_save_then_load_round_trips(self, tmp_path):
+        cache = {"key1": [0.1, 0.2, 0.3]}
+        save_query_cache(tmp_path, cache)
+        loaded = load_query_cache(tmp_path)
+        assert loaded == cache
+
+    def test_load_returns_empty_dict_on_corrupt_file(self, tmp_path):
+        (tmp_path / "query_cache.json").write_text("NOT JSON", encoding="utf-8")
+        assert load_query_cache(tmp_path) == {}
+
+    def test_save_overwrites_previous_cache(self, tmp_path):
+        save_query_cache(tmp_path, {"a": [1.0]})
+        save_query_cache(tmp_path, {"b": [2.0]})
+        loaded = load_query_cache(tmp_path)
+        assert "b" in loaded
+        assert "a" not in loaded
+
+
+# ---------------------------------------------------------------------------
+# get_cached_embedding / set_cached_embedding
+# ---------------------------------------------------------------------------
+
+
+class TestGetSetCachedEmbedding:
+    _MODEL = "google/gemini-embedding-2-preview"
+    _DIM = 8
+    _EMB = [0.1] * 8
+
+    def test_miss_returns_none(self, tmp_path):
+        result = get_cached_embedding(tmp_path, "hello", self._MODEL, self._DIM)
+        assert result is None
+
+    def test_hit_returns_embedding(self, tmp_path):
+        set_cached_embedding(tmp_path, "hello", self._MODEL, self._DIM, self._EMB)
+        result = get_cached_embedding(tmp_path, "hello", self._MODEL, self._DIM)
+        assert result == self._EMB
+
+    def test_case_insensitive(self, tmp_path):
+        set_cached_embedding(tmp_path, "Hello", self._MODEL, self._DIM, self._EMB)
+        result = get_cached_embedding(tmp_path, "hello", self._MODEL, self._DIM)
+        assert result == self._EMB
+
+    def test_punctuation_invariant(self, tmp_path):
+        set_cached_embedding(tmp_path, "cats!", self._MODEL, self._DIM, self._EMB)
+        result = get_cached_embedding(tmp_path, "cats", self._MODEL, self._DIM)
+        assert result == self._EMB
+
+    def test_different_model_is_cache_miss(self, tmp_path):
+        set_cached_embedding(tmp_path, "hello", self._MODEL, self._DIM, self._EMB)
+        result = get_cached_embedding(tmp_path, "hello", "other/model", self._DIM)
+        assert result is None
+
+    def test_different_dimensions_is_cache_miss(self, tmp_path):
+        set_cached_embedding(tmp_path, "hello", self._MODEL, self._DIM, self._EMB)
+        result = get_cached_embedding(tmp_path, "hello", self._MODEL, 16)
+        assert result is None
+
+    def test_set_returns_updated_cache(self, tmp_path):
+        cache = set_cached_embedding(tmp_path, "hello", self._MODEL, self._DIM, self._EMB)
+        assert isinstance(cache, dict)
+        assert len(cache) == 1
+
+    def test_accepts_pre_loaded_cache(self, tmp_path):
+        preloaded: dict = {}
+        set_cached_embedding(
+            tmp_path, "hello", self._MODEL, self._DIM, self._EMB, cache=preloaded
+        )
+        assert len(preloaded) == 1
+        result = get_cached_embedding(
+            tmp_path, "hello", self._MODEL, self._DIM, cache=preloaded
+        )
+        assert result == self._EMB

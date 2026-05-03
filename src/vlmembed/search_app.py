@@ -18,7 +18,12 @@ from vlmembed.contract import (
     ENV_API_KEY,
 )
 from vlmembed.embed import embed_text_query
-from vlmembed.store import get_collection, search
+from vlmembed.store import (
+    get_cached_embedding,
+    get_collection,
+    search,
+    set_cached_embedding,
+)
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -68,17 +73,30 @@ def _build_gallery_items(results: list[dict]) -> list[tuple]:
 # ---------------------------------------------------------------------------
 
 
-def make_search_fn(collection, *, api_key: str, model: str, dimensions: int):
+def make_search_fn(
+    collection,
+    *,
+    api_key: str,
+    model: str,
+    dimensions: int,
+    embed_dir: Path | None = None,
+):
     """Return a callable ``(query, n_results) -> list[tuple]`` for the search UI.
 
     Factored out of :func:`build_search_app` so it can be unit-tested without
     introspecting Gradio internals.
+
+    When *embed_dir* is provided, query embeddings are cached on disk so that
+    repeated identical queries (same text after lowercasing and stripping
+    punctuation) do not incur additional API calls.
 
     Args:
         collection: ChromaDB ``Collection`` object.
         api_key: OpenRouter API key.
         model: Embedding model identifier.
         dimensions: Embedding dimensionality.
+        embed_dir: Root embeddings directory used to persist the query cache.
+            When ``None`` caching is disabled.
 
     Returns:
         A function ``(query: str, n_results: int) -> list[tuple]``.
@@ -91,12 +109,26 @@ def make_search_fn(collection, *, api_key: str, model: str, dimensions: int):
         if count == 0:
             return []
         safe_n = min(int(n_results), count)
-        query_embedding = embed_text_query(
-            query,
-            model=model,
-            api_key=api_key,
-            dimensions=dimensions,
-        )
+
+        if embed_dir is not None:
+            query_embedding = get_cached_embedding(
+                embed_dir, query, model, dimensions
+            )
+        else:
+            query_embedding = None
+
+        if query_embedding is None:
+            query_embedding = embed_text_query(
+                query,
+                model=model,
+                api_key=api_key,
+                dimensions=dimensions,
+            )
+            if embed_dir is not None:
+                set_cached_embedding(
+                    embed_dir, query, model, dimensions, query_embedding
+                )
+
         results = search(collection, query_embedding, n_results=safe_n)
         return _build_gallery_items(results)
 
@@ -126,7 +158,13 @@ def build_search_app(
         A :class:`gradio.Blocks` instance.
     """
     collection = get_collection(embed_dir)
-    _run_search = make_search_fn(collection, api_key=api_key, model=model, dimensions=dimensions)
+    _run_search = make_search_fn(
+        collection,
+        api_key=api_key,
+        model=model,
+        dimensions=dimensions,
+        embed_dir=embed_dir,
+    )
 
     with gr.Blocks(title="vlmembed — PDF Semantic Search") as demo:
         gr.Markdown("# PDF Semantic Search\nEnter a text query to find the most relevant PDF pages.")
