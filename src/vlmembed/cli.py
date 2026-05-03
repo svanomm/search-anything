@@ -1,0 +1,404 @@
+"""Command-line interface for vlmembed."""
+
+from __future__ import annotations
+
+import argparse
+import os
+import sys
+from pathlib import Path
+
+import dotenv
+
+from vlmembed.contract import (
+    DEFAULT_DIMENSIONS,
+    DEFAULT_DPI,
+    DEFAULT_DOCS_DIR,
+    DEFAULT_EMBED_DIR,
+    DEFAULT_IMAGE_FORMAT,
+    DEFAULT_MAX_RETRIES,
+    DEFAULT_MAX_WORKERS,
+    DEFAULT_MODEL,
+    ENV_API_KEY,
+    ENV_DIMENSIONS,
+    ENV_DPI,
+    ENV_IMAGE_FORMAT,
+    ENV_MAX_RETRIES,
+    ENV_MAX_WORKERS,
+    ENV_MODEL,
+    ProjectPathStatus,
+    get_project_directories,
+)
+
+# ---------------------------------------------------------------------------
+# ANSI colour codes
+# ---------------------------------------------------------------------------
+
+_R = "\033[0m"
+_BOLD = "\033[1m"
+_DIM = "\033[2m"
+_GREEN = "\033[32m"
+_CYAN = "\033[36m"
+_YELLOW = "\033[33m"
+_RED = "\033[31m"
+
+_BANNER = (
+    f"\n{_BOLD}{_CYAN}"
+    "╔══════════════════════════════════════╗\n"
+    "║         vlmembed  v0.1.0             ║\n"
+    "║  Multimodal PDF embedding & search   ║\n"
+    "╚══════════════════════════════════════╝"
+    f"{_R}\n"
+)
+
+_MENU_OPTIONS = [
+    ("1", "Init          — create docs/ and embeddings/ structure"),
+    ("2", "Embed         — process PDFs and populate the vector store"),
+    ("3", "Search        — launch the Gradio semantic search UI"),
+    ("4", "Estimate cost — estimate embedding cost for docs/"),
+    ("5", "Quit"),
+]
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+
+def _resolve_int(cli_val: int | None, env_key: str, default: int) -> int:
+    """Return *cli_val* if set, else the env var cast to int, else *default*."""
+    if cli_val is not None:
+        return cli_val
+    env_val = os.environ.get(env_key)
+    return int(env_val) if env_val else default
+
+
+def _resolve_str(cli_val: str | None, env_key: str, default: str) -> str:
+    """Return *cli_val* if non-empty, else the env var, else *default*."""
+    if cli_val:
+        return cli_val
+    return os.environ.get(env_key) or default
+
+
+def _print_path_status(label: str, path: Path, exists: bool) -> None:
+    tick = f"{_GREEN}✓{_R}" if exists else f"{_YELLOW}·{_R}"
+    print(f"  {tick} {_DIM}{label}:{_R} {path}")
+
+
+# ---------------------------------------------------------------------------
+# Subcommand: init
+# ---------------------------------------------------------------------------
+
+
+def cmd_init(args: argparse.Namespace) -> int:
+    """Create the standard vlmembed workspace directory structure."""
+    docs_dir = Path(args.docs_dir)
+    embed_dir = Path(args.embed_dir)
+
+    print(f"\n{_BOLD}Initialising project structure…{_R}\n")
+
+    directories = get_project_directories(docs_dir=docs_dir, embed_dir=embed_dir)
+    statuses: list[ProjectPathStatus] = []
+    for label, path in directories.items():
+        path.mkdir(parents=True, exist_ok=True)
+        statuses.append(ProjectPathStatus(label=label, path=path, exists=path.exists()))
+
+    for s in statuses:
+        _print_path_status(s.label, s.path, s.exists)
+
+    print(
+        f"\n{_GREEN}Done.{_R} Drop PDFs into {_BOLD}{docs_dir}{_R} "
+        f"then run {_BOLD}vlmembed embed{_R}.\n"
+    )
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# Subcommand: embed
+# ---------------------------------------------------------------------------
+
+
+def cmd_embed(args: argparse.Namespace) -> int:
+    """Embed all unprocessed PDF pages into the ChromaDB vector store."""
+    from vlmembed.embed import embed_all_pdfs  # noqa: PLC0415
+
+    dotenv.load_dotenv()
+
+    api_key = _resolve_str(args.api_key, ENV_API_KEY, "")
+    model = _resolve_str(args.model, ENV_MODEL, DEFAULT_MODEL)
+    dpi = _resolve_int(args.dpi, ENV_DPI, DEFAULT_DPI)
+    image_format = _resolve_str(args.image_format, ENV_IMAGE_FORMAT, DEFAULT_IMAGE_FORMAT)
+    dimensions = _resolve_int(args.dimensions, ENV_DIMENSIONS, DEFAULT_DIMENSIONS)
+    max_workers = _resolve_int(args.max_workers, ENV_MAX_WORKERS, DEFAULT_MAX_WORKERS)
+    max_retries = _resolve_int(args.max_retries, ENV_MAX_RETRIES, DEFAULT_MAX_RETRIES)
+
+    docs_dir = Path(args.docs_dir)
+    embed_dir = Path(args.embed_dir)
+
+    print(f"\n{_BOLD}Embedding PDFs…{_R}\n")
+    results = embed_all_pdfs(
+        docs_dir,
+        embed_dir,
+        api_key=api_key or None,
+        model=model,
+        dpi=dpi,
+        image_format=image_format,
+        dimensions=dimensions,
+        max_workers=max_workers,
+        max_retries=max_retries,
+    )
+    n = len(results)
+    print(f"\n{_GREEN}Done.{_R} {_BOLD}{n}{_R} page(s) newly embedded.\n")
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# Subcommand: search
+# ---------------------------------------------------------------------------
+
+
+def cmd_search(args: argparse.Namespace) -> int:
+    """Launch the Gradio semantic search UI."""
+    from vlmembed.search_app import launch_search_app  # noqa: PLC0415
+
+    # launch_search_app calls dotenv.load_dotenv() internally; load it here
+    # too so that env-var fallback for model/dimensions works correctly.
+    dotenv.load_dotenv()
+
+    # api_key: pass as-is (empty string means launch_search_app will use env).
+    api_key = args.api_key or ""
+    model = _resolve_str(args.model, ENV_MODEL, DEFAULT_MODEL)
+    dimensions = _resolve_int(args.dimensions, ENV_DIMENSIONS, DEFAULT_DIMENSIONS)
+    embed_dir = Path(args.embed_dir)
+    port = args.port
+
+    print(f"\n{_BOLD}Launching search UI at http://localhost:{port}{_R}\n")
+    launch_search_app(
+        embed_dir=embed_dir,
+        api_key=api_key,
+        model=model,
+        dimensions=dimensions,
+        port=port,
+    )
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# Subcommand: estimate-cost
+# ---------------------------------------------------------------------------
+
+
+def cmd_estimate_cost(args: argparse.Namespace) -> int:
+    """Estimate the cost to embed all PDFs in the docs directory."""
+    from vlmembed.estimate_cost import estimate_cost  # noqa: PLC0415
+
+    docs_dir = Path(args.docs_dir)
+    dpi = _resolve_int(getattr(args, "dpi", None), ENV_DPI, DEFAULT_DPI)
+
+    print(f"\n{_BOLD}Estimating embedding cost…{_R}\n")
+    result = estimate_cost(docs_dir=docs_dir, dpi=dpi)
+
+    if not result["per_file"]:
+        print(f"  {_YELLOW}No PDFs found in {docs_dir}{_R}\n")
+        return 0
+
+    for filename, pages in result["per_file"].items():
+        print(f"  {_DIM}{filename}:{_R} {pages} page(s)")
+
+    print(f"\n  Total pages:     {_BOLD}{result['pages']}{_R}")
+    print(f"  Tokens/page:     {_BOLD}{result['tokens_per_page']:,}{_R}")
+    print(f"  Total tokens:    {_BOLD}{result['total_tokens']:,}{_R}")
+    print(f"  Estimated cost:  {_BOLD}{_GREEN}${result['estimated_usd']:.4f}{_R}")
+    print(
+        f"\n  {_DIM}Disclaimer: estimate based on ~$0.45/M tokens at {dpi} DPI "
+        f"(US Letter page size). Actual cost may vary.{_R}\n"
+    )
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# Interactive menu
+# ---------------------------------------------------------------------------
+
+
+def _interactive_menu() -> int:
+    """Show an interactive TUI menu and dispatch the chosen action."""
+    print(_BANNER)
+    while True:
+        print(f"{_BOLD}What would you like to do?{_R}\n")
+        for key, label in _MENU_OPTIONS:
+            print(f"  {_CYAN}{key}{_R}  {label}")
+        print()
+        try:
+            choice = input(f"{_BOLD}>{_R} ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print(f"\n{_DIM}Bye.{_R}\n")
+            return 0
+
+        if choice == "1":
+            ns = argparse.Namespace(
+                docs_dir=str(DEFAULT_DOCS_DIR),
+                embed_dir=str(DEFAULT_EMBED_DIR),
+            )
+            cmd_init(ns)
+        elif choice == "2":
+            ns = argparse.Namespace(
+                docs_dir=str(DEFAULT_DOCS_DIR),
+                embed_dir=str(DEFAULT_EMBED_DIR),
+                api_key=None,
+                model=None,
+                dpi=None,
+                image_format=None,
+                dimensions=None,
+                max_workers=None,
+                max_retries=None,
+            )
+            cmd_embed(ns)
+        elif choice == "3":
+            ns = argparse.Namespace(
+                embed_dir=str(DEFAULT_EMBED_DIR),
+                api_key=None,
+                model=None,
+                dimensions=None,
+                port=7860,
+            )
+            cmd_search(ns)
+        elif choice == "4":
+            ns = argparse.Namespace(
+                docs_dir=str(DEFAULT_DOCS_DIR),
+                dpi=None,
+            )
+            cmd_estimate_cost(ns)
+        elif choice in {"5", "q", "quit", "exit"}:
+            print(f"\n{_DIM}Bye.{_R}\n")
+            return 0
+        else:
+            print(f"\n{_YELLOW}Unknown option {choice!r}. Enter 1–5.{_R}\n")
+
+
+# ---------------------------------------------------------------------------
+# Argument parser
+# ---------------------------------------------------------------------------
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="vlmembed",
+        description="Multimodal PDF embedding and semantic search via OpenRouter and ChromaDB.",
+    )
+    sub = parser.add_subparsers(dest="subcommand")
+
+    # --- init ---
+    p_init = sub.add_parser("init", help="Create the project directory structure.")
+    p_init.add_argument(
+        "--docs-dir",
+        default=str(DEFAULT_DOCS_DIR),
+        help=f"Documents directory (default: {DEFAULT_DOCS_DIR}).",
+    )
+    p_init.add_argument(
+        "--embed-dir",
+        default=str(DEFAULT_EMBED_DIR),
+        help=f"Embeddings directory (default: {DEFAULT_EMBED_DIR}).",
+    )
+
+    # --- embed ---
+    p_embed = sub.add_parser("embed", help="Embed all PDFs into the vector store.")
+    p_embed.add_argument("--docs-dir", default=str(DEFAULT_DOCS_DIR))
+    p_embed.add_argument("--embed-dir", default=str(DEFAULT_EMBED_DIR))
+    p_embed.add_argument("--api-key", default=None, help="OpenRouter API key.")
+    p_embed.add_argument(
+        "--model",
+        default=None,
+        help=f"Embedding model (default: {DEFAULT_MODEL}).",
+    )
+    p_embed.add_argument(
+        "--dpi",
+        type=int,
+        default=None,
+        help=f"Render DPI (default: {DEFAULT_DPI}).",
+    )
+    p_embed.add_argument(
+        "--format",
+        dest="image_format",
+        default=None,
+        help=f"Image format: png or jpeg (default: {DEFAULT_IMAGE_FORMAT}).",
+    )
+    p_embed.add_argument(
+        "--dimensions",
+        type=int,
+        default=None,
+        help=f"Embedding dimensions (default: {DEFAULT_DIMENSIONS}).",
+    )
+    p_embed.add_argument(
+        "--max-workers",
+        type=int,
+        default=None,
+        help=f"Thread pool size (default: {DEFAULT_MAX_WORKERS}).",
+    )
+    p_embed.add_argument(
+        "--max-retries",
+        type=int,
+        default=None,
+        help=f"Retries per page (default: {DEFAULT_MAX_RETRIES}).",
+    )
+
+    # --- search ---
+    p_search = sub.add_parser("search", help="Launch the Gradio semantic search UI.")
+    p_search.add_argument("--embed-dir", default=str(DEFAULT_EMBED_DIR))
+    p_search.add_argument("--api-key", default=None, help="OpenRouter API key.")
+    p_search.add_argument(
+        "--model",
+        default=None,
+        help=f"Embedding model (default: {DEFAULT_MODEL}).",
+    )
+    p_search.add_argument(
+        "--dimensions",
+        type=int,
+        default=None,
+        help=f"Embedding dimensions (default: {DEFAULT_DIMENSIONS}).",
+    )
+    p_search.add_argument(
+        "--port",
+        type=int,
+        default=7860,
+        help="Local port for Gradio (default: 7860).",
+    )
+
+    # --- estimate-cost ---
+    p_est = sub.add_parser("estimate-cost", help="Estimate embedding cost for PDFs in docs/.")
+    p_est.add_argument("--docs-dir", default=str(DEFAULT_DOCS_DIR))
+    p_est.add_argument(
+        "--dpi",
+        type=int,
+        default=None,
+        help=f"Render DPI used for token estimation (default: {DEFAULT_DPI}).",
+    )
+
+    return parser
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Parse *argv* (or ``sys.argv[1:]``) and dispatch to the right subcommand."""
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+
+    if args.subcommand is None:
+        return _interactive_menu()
+    if args.subcommand == "init":
+        return cmd_init(args)
+    if args.subcommand == "embed":
+        return cmd_embed(args)
+    if args.subcommand == "search":
+        return cmd_search(args)
+    if args.subcommand == "estimate-cost":
+        return cmd_estimate_cost(args)
+
+    parser.print_help()
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
