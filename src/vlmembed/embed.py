@@ -330,7 +330,7 @@ def embed_all_pdfs(
                 )
                 metadata: PageMetadata = {
                     "doc_path": str(pdf_path),
-                    "page_number": page_idx,
+                    "page_number": page_idx + 1,
                     "doc_hash": doc_hash,
                     "settings_hash": settings_hash,
                     "image_cache_path": str(image_path),

@@ -48,9 +48,9 @@ def _load_image(image_cache_path: str):
 def _make_caption(metadata: dict, distance: float) -> str:
     """Format a result caption from metadata and cosine distance."""
     filename = Path(metadata.get("doc_path", "unknown")).name
-    page_num = metadata.get("page_number", 0)
+    page_num = metadata.get("page_number", 1)
     similarity = 1.0 - distance
-    return f"{filename} · page {page_num + 1} · score {similarity:.3f}"
+    return f"{filename} · page {page_num} · score {similarity:.3f}"
 
 
 def _build_gallery_items(results: list[dict]) -> list[tuple]:
@@ -242,4 +242,4 @@ def launch_search_app(
         model=model,
         dimensions=dimensions,
     )
-    demo.launch(server_port=port)
+    demo.launch(server_port=port, inbrowser=True)

@@ -60,19 +60,19 @@ class TestMakeCaption:
 
         meta = _make_metadata(page_number=2, doc_path="docs/annual_report.pdf")
         caption = _make_caption(meta, distance=0.3)
-        assert caption == "annual_report.pdf · page 3 · score 0.700"
+        assert caption == "annual_report.pdf · page 2 · score 0.700"
 
     def test_page_number_one_indexed(self):
         from vlmembed.search_app import _make_caption
 
-        meta = _make_metadata(page_number=0)
+        meta = _make_metadata(page_number=1)
         caption = _make_caption(meta, distance=0.0)
         assert "page 1" in caption
 
     def test_score_is_one_minus_distance(self):
         from vlmembed.search_app import _make_caption
 
-        meta = _make_metadata(page_number=0)
+        meta = _make_metadata(page_number=1)
         caption = _make_caption(meta, distance=0.5)
         assert "score 0.500" in caption
 
@@ -153,7 +153,7 @@ class TestBuildGalleryItems:
     def test_multiple_results_preserve_order(self):
         from vlmembed.search_app import _build_gallery_items
 
-        results = [_make_result(page_number=i) for i in range(3)]
+        results = [_make_result(page_number=i + 1) for i in range(3)]
         items = _build_gallery_items(results)
         assert len(items) == 3
         for i, (_, caption) in enumerate(items):

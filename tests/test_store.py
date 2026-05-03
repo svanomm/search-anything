@@ -43,7 +43,7 @@ def _make_collection():
     )
 
 
-def _sample_metadata(page_number: int = 0) -> dict:
+def _sample_metadata(page_number: int = 1) -> dict:
     return {
         "doc_path": "docs/sample.pdf",
         "page_number": page_number,
