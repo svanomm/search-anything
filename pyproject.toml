@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "vlm-embed"
+version = "0.1.0"
+description = "Multimodal PDF embedding and semantic search via OpenRouter and ChromaDB"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "requests>=2.32.0",
+    "pymupdf>=1.27.1",
+    "chromadb>=0.5.0",
+    "gradio>=5.0.0",
+    "tqdm>=4.67.2",
+    "python-dotenv>=1.0.0",
+]
+
+[project.scripts]
+vlmembed = "vlmembed.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/vlmembed"]
+
+[tool.uv]
+package = true
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "ruff>=0.14.14",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]

@@ -1,0 +1,8 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^uv sync$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}
