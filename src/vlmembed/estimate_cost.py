@@ -16,12 +16,8 @@ from vlmembed.contract import DEFAULT_DOCS_DIR, DEFAULT_DPI
 # This is an estimate; actual pricing may differ.
 _PRICE_PER_M_TOKENS: float = 0.2
 
-# Pixels per token — rough estimate used by typical vision models.
-_PIXELS_PER_TOKEN: int = 256
-
-# Reference page dimensions: US Letter at 1 inch = 1 DPI unit.
-_PAGE_WIDTH_INCHES: float = 8.5
-_PAGE_HEIGHT_INCHES: float = 11.0
+# Tokens per page — based on testing with default model.
+TOKENS_PER_PAGE: int = 258
 
 # ---------------------------------------------------------------------------
 # Public helpers
@@ -51,19 +47,16 @@ def count_pdf_pages(docs_dir: Path = DEFAULT_DOCS_DIR) -> dict[str, int]:
 def estimate_tokens_per_page(dpi: int = DEFAULT_DPI) -> int:
     """Estimate the number of image tokens for one page rendered at *dpi*.
 
-    Uses a US Letter page (8.5 × 11 in) as the reference size and assumes
-    one token per :data:`_PIXELS_PER_TOKEN` pixels.
+    Based on empirical testing, a typical page contains approximately
+    258 image tokens when rendered at standard DPI.
 
     Args:
-        dpi: Render resolution in dots per inch.
+        dpi: Render resolution in dots per inch (currently unused).
 
     Returns:
-        Approximate token count per page (always at least 1).
+        Approximate token count per page.
     """
-    width_px = int(_PAGE_WIDTH_INCHES * dpi)
-    height_px = int(_PAGE_HEIGHT_INCHES * dpi)
-    pixels = width_px * height_px
-    return max(1, pixels // _PIXELS_PER_TOKEN)
+    return TOKENS_PER_PAGE
 
 
 def estimate_cost_from_page_counts(

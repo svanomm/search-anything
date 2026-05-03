@@ -169,30 +169,30 @@ def build_search_app(
     with gr.Blocks(title="vlmembed — PDF Semantic Search") as demo:
         gr.Markdown("# PDF Semantic Search\nEnter a text query to find the most relevant PDF pages.")
 
-        with gr.Row():
-            query_box = gr.Textbox(
-                label="Query",
-                placeholder="Describe what you're looking for…",
-                lines=2,
-                scale=4,
-            )
-            n_slider = gr.Slider(
-                minimum=1,
-                maximum=20,
-                value=5,
-                step=1,
-                label="Top N results",
-                scale=1,
-            )
+        with gr.Row(equal_height=True):
+            with gr.Column(scale=1, min_width=320):
+                query_box = gr.Textbox(
+                    label="Query",
+                    placeholder="Describe what you're looking for…",
+                    lines=3,
+                )
+                n_slider = gr.Slider(
+                    minimum=1,
+                    maximum=20,
+                    value=5,
+                    step=1,
+                    label="Top N results",
+                )
+                search_btn = gr.Button("Search", variant="primary")
 
-        search_btn = gr.Button("Search", variant="primary")
-
-        gallery = gr.Gallery(
-            label="Results",
-            columns=3,
-            object_fit="contain",
-            height="auto",
-        )
+            with gr.Column(scale=3, min_width=640):
+                gallery = gr.Gallery(
+                    label="Results",
+                    columns=2,
+                    object_fit="contain",
+                    height="78vh",
+                    preview=True,
+                )
 
         search_btn.click(
             fn=_run_search,
