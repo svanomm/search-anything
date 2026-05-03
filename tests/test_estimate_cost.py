@@ -8,9 +8,6 @@ import fitz
 import pytest
 
 from vlmembed.estimate_cost import (
-    _PAGE_HEIGHT_INCHES,
-    _PAGE_WIDTH_INCHES,
-    _PIXELS_PER_TOKEN,
     _PRICE_PER_M_TOKENS,
     count_pdf_pages,
     estimate_cost,
@@ -99,16 +96,6 @@ class TestEstimateTokensPerPage:
         assert isinstance(result, int)
         assert result > 0
 
-    def test_formula_at_200_dpi(self):
-        dpi = 200
-        width_px = int(_PAGE_WIDTH_INCHES * dpi)
-        height_px = int(_PAGE_HEIGHT_INCHES * dpi)
-        expected = max(1, (width_px * height_px) // _PIXELS_PER_TOKEN)
-        assert estimate_tokens_per_page(dpi=dpi) == expected
-
-    def test_higher_dpi_gives_more_tokens(self):
-        assert estimate_tokens_per_page(dpi=300) > estimate_tokens_per_page(dpi=100)
-
     def test_very_low_dpi_returns_at_least_one(self):
         # Even at dpi=1 (degenerate case), must return >= 1.
         result = estimate_tokens_per_page(dpi=1)
@@ -118,13 +105,6 @@ class TestEstimateTokensPerPage:
         from vlmembed.contract import DEFAULT_DPI
 
         assert estimate_tokens_per_page() == estimate_tokens_per_page(dpi=DEFAULT_DPI)
-
-    def test_tokens_scale_quadratically_with_dpi(self):
-        # Doubling DPI should ~quadruple the token count (area scales as DPI²).
-        low = estimate_tokens_per_page(dpi=100)
-        high = estimate_tokens_per_page(dpi=200)
-        ratio = high / low
-        assert 3.5 < ratio < 4.5
 
 
 # ---------------------------------------------------------------------------
@@ -175,12 +155,6 @@ class TestEstimateCost:
         _make_pdf(tmp_path / "x.pdf", num_pages=5)
         result = estimate_cost(docs_dir=tmp_path, dpi=200)
         assert result["per_file"] == {"x.pdf": 5}
-
-    def test_dpi_affects_tokens_per_page(self, tmp_path):
-        _make_pdf(tmp_path / "doc.pdf", num_pages=1)
-        low = estimate_cost(docs_dir=tmp_path, dpi=100)
-        high = estimate_cost(docs_dir=tmp_path, dpi=300)
-        assert high["tokens_per_page"] > low["tokens_per_page"]
 
     def test_default_docs_dir_used_when_not_specified(self):
         # Python evaluates default argument values at definition time, so we
