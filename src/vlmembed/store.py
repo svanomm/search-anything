@@ -1,14 +1,14 @@
-"""ChromaDB vector store for vlmembed — stub implementation.
-
-The public functions defined here are called by :mod:`vlmembed.embed`.
-This module will be fully implemented in Phase 3; for now each function
-raises :class:`NotImplementedError` so that the interface is stable and
-tests can patch individual functions without importing chromadb.
-"""
+"""ChromaDB vector store for vlmembed."""
 
 from __future__ import annotations
 
 from pathlib import Path
+
+import chromadb
+
+from vlmembed.contract import get_db_dir
+
+_COLLECTION_NAME = "pdf_pages"
 
 
 def get_collection(embed_dir: Path):
@@ -20,12 +20,13 @@ def get_collection(embed_dir: Path):
 
     Returns:
         A ChromaDB ``Collection`` object.
-
-    Raises:
-        NotImplementedError: Until Phase 3 is implemented.
     """
-    raise NotImplementedError(
-        "store.get_collection() will be implemented in Phase 3"
+    db_dir = get_db_dir(embed_dir)
+    db_dir.mkdir(parents=True, exist_ok=True)
+    client = chromadb.PersistentClient(path=str(db_dir))
+    return client.get_or_create_collection(
+        name=_COLLECTION_NAME,
+        metadata={"hnsw:space": "cosine"},
     )
 
 
@@ -38,13 +39,9 @@ def page_exists(collection, page_id: str) -> bool:
 
     Returns:
         ``True`` if the page is present, ``False`` otherwise.
-
-    Raises:
-        NotImplementedError: Until Phase 3 is implemented.
     """
-    raise NotImplementedError(
-        "store.page_exists() will be implemented in Phase 3"
-    )
+    result = collection.get(ids=[page_id], include=[])
+    return len(result["ids"]) > 0
 
 
 def upsert_page(
@@ -61,12 +58,11 @@ def upsert_page(
         embedding: Embedding vector.
         metadata: Metadata dict conforming to
             :class:`~vlmembed.contract.PageMetadata`.
-
-    Raises:
-        NotImplementedError: Until Phase 3 is implemented.
     """
-    raise NotImplementedError(
-        "store.upsert_page() will be implemented in Phase 3"
+    collection.upsert(
+        ids=[page_id],
+        embeddings=[embedding],
+        metadatas=[metadata],
     )
 
 
@@ -84,10 +80,16 @@ def search(
 
     Returns:
         List of dicts conforming to :class:`~vlmembed.contract.SearchResult`.
-
-    Raises:
-        NotImplementedError: Until Phase 3 is implemented.
     """
-    raise NotImplementedError(
-        "store.search() will be implemented in Phase 3"
+    result = collection.query(
+        query_embeddings=[query_embedding],
+        n_results=n_results,
     )
+    return [
+        {"page_id": page_id, "metadata": metadata, "distance": distance}
+        for page_id, metadata, distance in zip(
+            result["ids"][0],
+            result["metadatas"][0],
+            result["distances"][0],
+        )
+    ]
