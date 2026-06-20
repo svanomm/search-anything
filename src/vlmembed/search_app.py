@@ -48,12 +48,80 @@ def _load_image(image_cache_path: str):
     return None
 
 
-def _make_caption(metadata: dict, distance: float) -> str:
-    """Format a result caption from metadata and cosine distance."""
+def _detect_modality(metadata: dict, page_id: str = "") -> str:
+    """Infer modality from doc path extension, falling back to page-id suffixes."""
+    suffix = Path(metadata.get("doc_path", "")).suffix.lower()
+    if suffix == ".pdf":
+        return "pdf"
+    if suffix in {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".heic", ".heif", ".avif"}:
+        return "image"
+    if suffix in {".txt", ".md", ".markdown"}:
+        return "text"
+    if suffix in {".mp3", ".wav"}:
+        return "audio"
+    if suffix in {".mp4", ".mov", ".mkv", ".webm", ".avi"}:
+        return "video"
+
+    if "_txt_" in page_id:
+        return "text"
+    if "_aud_" in page_id:
+        return "audio"
+    if "_vid_" in page_id:
+        return "video"
+    if "_img_" in page_id:
+        return "image"
+
+    return "unknown"
+
+
+def _position_label(metadata: dict, modality: str) -> str:
+    """Return a modality-aware ordinal label (page/chunk/segment)."""
+    index = int(metadata.get("page_number", 1))
+    if modality == "pdf":
+        return f"page {index}"
+    if modality == "text":
+        return f"chunk {index}"
+    if modality in {"audio", "video"}:
+        return f"segment {index}"
+    if modality == "image":
+        return "image"
+    return f"item {index}"
+
+
+def _make_placeholder_tile(metadata: dict, modality: str):
+    """Create a placeholder preview image for non-image search results."""
+    from PIL import Image, ImageDraw
+
+    colors = {
+        "text": (47, 92, 171),
+        "audio": (176, 100, 36),
+        "video": (31, 122, 96),
+        "unknown": (82, 88, 95),
+    }
+    background = colors.get(modality, colors["unknown"])
+
     filename = Path(metadata.get("doc_path", "unknown")).name
-    page_num = metadata.get("page_number", 1)
+    label = _position_label(metadata, modality)
+
+    image = Image.new("RGB", (900, 640), color=background)
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((24, 24, 876, 616), outline=(235, 235, 235), width=4)
+    draw.text((64, 120), modality.upper(), fill=(255, 255, 255))
+    draw.text((64, 240), filename, fill=(245, 245, 245))
+    draw.text((64, 320), label, fill=(245, 245, 245))
+    draw.text((64, 520), _PLACEHOLDER_TEXT, fill=(230, 230, 230))
+    return image
+
+
+def _make_caption(metadata: dict, distance: float, *, modality: str | None = None) -> str:
+    """Format a result caption from metadata and cosine distance."""
+    modality = modality or _detect_modality(metadata)
+    filename = Path(metadata.get("doc_path", "unknown")).name
+    label = _position_label(metadata, modality)
     similarity = 1.0 - distance
-    return f"{filename} · page {page_num} · score {similarity:.3f}"
+    if modality == "pdf":
+        return f"{filename} · {label} · score {similarity:.3f}"
+    return f"{filename} · {label} · {modality} · score {similarity:.3f}"
 
 
 def _build_gallery_items(results: list[dict]) -> list[tuple]:
@@ -61,13 +129,12 @@ def _build_gallery_items(results: list[dict]) -> list[tuple]:
     items: list[tuple] = []
     for r in results:
         meta = r["metadata"]
-        caption = _make_caption(meta, r["distance"])
+        modality = _detect_modality(meta, r.get("page_id", ""))
+        caption = _make_caption(meta, r["distance"], modality=modality)
         img = _load_image(meta.get("image_cache_path", ""))
-        if img is not None:
-            items.append((img, caption))
-        else:
-            # Gradio gallery accepts a path string; pass None to show a blank tile
-            items.append((None, caption))
+        if img is None:
+            img = _make_placeholder_tile(meta, modality)
+        items.append((img, caption))
     return items
 
 

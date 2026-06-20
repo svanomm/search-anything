@@ -32,10 +32,15 @@ def _make_result(
     page_number: int = 0,
     distance: float = 0.2,
     image_cache_path: str = "",
+    doc_path: str = "docs/report.pdf",
 ) -> dict:
     return {
         "page_id": f"abc123_{page_number}",
-        "metadata": _make_metadata(page_number=page_number, image_cache_path=image_cache_path),
+        "metadata": _make_metadata(
+            page_number=page_number,
+            image_cache_path=image_cache_path,
+            doc_path=doc_path,
+        ),
         "distance": distance,
     }
 
@@ -80,6 +85,14 @@ class TestMakeCaption:
         caption = _make_caption(meta, distance=0.1)
         assert "unknown" in caption
 
+    def test_non_pdf_includes_modality_and_segment_label(self):
+        from vlmembed.search_app import _make_caption
+
+        meta = _make_metadata(page_number=2, doc_path="docs/clip.mp3")
+        caption = _make_caption(meta, distance=0.2)
+        assert "segment 2" in caption
+        assert "audio" in caption
+
 
 # ---------------------------------------------------------------------------
 # _load_image
@@ -123,15 +136,31 @@ class TestBuildGalleryItems:
 
         assert _build_gallery_items([]) == []
 
-    def test_missing_image_produces_none_tile(self):
+    def test_missing_image_produces_placeholder_tile(self):
+        from PIL import Image
+
         from vlmembed.search_app import _build_gallery_items
 
         results = [_make_result(image_cache_path="/no/such/file.png")]
         items = _build_gallery_items(results)
         assert len(items) == 1
         img, caption = items[0]
-        assert img is None
+        assert isinstance(img, Image.Image)
         assert "report.pdf" in caption
+
+    def test_non_image_result_gets_modality_caption(self):
+        from vlmembed.search_app import _build_gallery_items
+
+        results = [
+            _make_result(
+                page_number=3,
+                image_cache_path="",
+                doc_path="docs/transcript.md",
+            )
+        ]
+        _, caption = _build_gallery_items(results)[0]
+        assert "chunk 3" in caption
+        assert "text" in caption
 
     def test_valid_image_produces_pil_tile(self, tmp_path):
         from PIL import Image
