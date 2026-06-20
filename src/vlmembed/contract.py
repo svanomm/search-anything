@@ -107,6 +107,15 @@ class SearchResult(TypedDict):
     distance: float
 
 
+class StoreMetadata(TypedDict):
+    """Metadata persisted for validating vector-store compatibility."""
+
+    provider: str
+    schema_version: str
+    model: str
+    dimensions: int
+
+
 # ---------------------------------------------------------------------------
 # Frozen dataclass for project-path validation
 # ---------------------------------------------------------------------------

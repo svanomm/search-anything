@@ -531,6 +531,11 @@ def embed_all_pdfs(
         dimensions=dimensions,
     )
 
+    _store.ensure_store_compatibility(
+        embed_dir,
+        model=model,
+        dimensions=dimensions,
+    )
     collection = _store.get_collection(embed_dir)
 
     # Build all pending tasks for recursive multimodal ingestion.

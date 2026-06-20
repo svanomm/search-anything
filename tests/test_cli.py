@@ -4,10 +4,8 @@ from __future__ import annotations
 
 import argparse
 import os
-from pathlib import Path
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import patch
 
-import pytest
 
 from vlmembed.cli import (
     _build_parser,

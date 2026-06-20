@@ -21,6 +21,7 @@ from vlmembed.contract import (
 )
 from vlmembed.embed import embed_text_query
 from vlmembed.store import (
+    ensure_store_compatibility,
     get_cached_embedding,
     get_collection,
     search,
@@ -159,6 +160,11 @@ def build_search_app(
     Returns:
         A :class:`gradio.Blocks` instance.
     """
+    ensure_store_compatibility(
+        embed_dir,
+        model=model,
+        dimensions=dimensions,
+    )
     collection = get_collection(embed_dir)
     _run_search = make_search_fn(
         collection,

@@ -9,9 +9,15 @@ from pathlib import Path
 
 import chromadb
 
-from vlmembed.contract import get_db_dir
+from vlmembed.contract import (
+    EMBEDDING_PROVIDER,
+    STORE_SCHEMA_VERSION,
+    StoreMetadata,
+    get_db_dir,
+)
 
 _QUERY_CACHE_FILE = "query_cache.json"
+_STORE_META_FILE = "store_meta.json"
 
 
 # ---------------------------------------------------------------------------
@@ -52,6 +58,108 @@ def _query_cache_key(normalized: str, model: str, dimensions: int) -> str:
     # Null-byte separators prevent cross-field collisions
     payload = f"{normalized}\x00{model}\x00{dimensions}"
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _store_meta_path(embed_dir: Path) -> Path:
+    """Return the path to the persisted store metadata file."""
+    return embed_dir / _STORE_META_FILE
+
+
+def _expected_store_metadata(model: str, dimensions: int) -> StoreMetadata:
+    """Build the expected store metadata for the current runtime settings."""
+    return {
+        "provider": EMBEDDING_PROVIDER,
+        "schema_version": STORE_SCHEMA_VERSION,
+        "model": model,
+        "dimensions": dimensions,
+    }
+
+
+def load_store_metadata(embed_dir: Path) -> StoreMetadata | None:
+    """Load store metadata from disk, returning ``None`` when absent."""
+    path = _store_meta_path(embed_dir)
+    if not path.exists():
+        return None
+
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"Corrupt store metadata file: {path}") from exc
+
+    if not isinstance(raw, dict):
+        raise RuntimeError(f"Invalid store metadata format in: {path}")
+
+    required = {"provider", "schema_version", "model", "dimensions"}
+    missing = required.difference(raw)
+    if missing:
+        missing_str = ", ".join(sorted(missing))
+        raise RuntimeError(
+            f"Store metadata file is missing required keys ({missing_str}): {path}"
+        )
+
+    dimensions = raw["dimensions"]
+    if not isinstance(dimensions, int):
+        raise RuntimeError(f"Store metadata dimensions must be int in: {path}")
+
+    return {
+        "provider": str(raw["provider"]),
+        "schema_version": str(raw["schema_version"]),
+        "model": str(raw["model"]),
+        "dimensions": dimensions,
+    }
+
+
+def save_store_metadata(embed_dir: Path, metadata: StoreMetadata) -> None:
+    """Persist store metadata under the embeddings directory."""
+    embed_dir.mkdir(parents=True, exist_ok=True)
+    _store_meta_path(embed_dir).write_text(
+        json.dumps(metadata, sort_keys=True, separators=(",", ":")),
+        encoding="utf-8",
+    )
+
+
+def ensure_store_compatibility(
+    embed_dir: Path,
+    *,
+    model: str,
+    dimensions: int,
+) -> StoreMetadata:
+    """Validate store metadata and fail fast on incompatible schema/provider.
+
+    If metadata is missing, this initializes it with the current expected values.
+    """
+    expected = _expected_store_metadata(model=model, dimensions=dimensions)
+    existing = load_store_metadata(embed_dir)
+
+    if existing is None:
+        save_store_metadata(embed_dir, expected)
+        return expected
+
+    mismatches: list[str] = []
+    for key in ("provider", "schema_version", "dimensions"):
+        if existing[key] != expected[key]:
+            mismatches.append(
+                f"{key}: expected {expected[key]!r}, found {existing[key]!r}"
+            )
+
+    if mismatches:
+        details = "; ".join(mismatches)
+        raise RuntimeError(
+            "Store metadata mismatch detected. "
+            f"{details}. Delete '{embed_dir}' and re-run 'vlmembed embed' to rebuild."
+        )
+
+    if existing["model"] != model:
+        updated: StoreMetadata = {
+            "provider": existing["provider"],
+            "schema_version": existing["schema_version"],
+            "model": model,
+            "dimensions": existing["dimensions"],
+        }
+        save_store_metadata(embed_dir, updated)
+        return updated
+
+    return existing
 
 
 def load_query_cache(embed_dir: Path) -> dict[str, list[float]]:

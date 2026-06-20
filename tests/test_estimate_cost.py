@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import fitz
-import pytest
 
 from vlmembed.estimate_cost import (
     _PRICE_PER_M_TOKENS,

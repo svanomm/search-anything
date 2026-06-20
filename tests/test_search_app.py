@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import gradio as gr
-import pytest
 
 # ---------------------------------------------------------------------------
 # Helpers / fixtures
@@ -200,6 +197,24 @@ class TestBuildSearchApp:
             dimensions=8,
         )
         mock_get_col.assert_called_once_with(tmp_path)
+
+    @patch("vlmembed.search_app.ensure_store_compatibility")
+    @patch("vlmembed.search_app.get_collection")
+    def test_validates_store_compatibility(self, mock_get_col, mock_compat, tmp_path):
+        from vlmembed.search_app import build_search_app
+
+        mock_get_col.return_value = _mock_collection()
+        build_search_app(
+            embed_dir=tmp_path,
+            api_key="k",
+            model="gemini-embedding-2",
+            dimensions=8,
+        )
+        mock_compat.assert_called_once_with(
+            tmp_path,
+            model="gemini-embedding-2",
+            dimensions=8,
+        )
 
 
 # ---------------------------------------------------------------------------

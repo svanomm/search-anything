@@ -4,15 +4,16 @@ from __future__ import annotations
 
 import json
 import uuid
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import chromadb
 import pytest
 
 from vlmembed.store import (
+    ensure_store_compatibility,
     get_collection,
     get_cached_embedding,
+    load_store_metadata,
     load_query_cache,
     normalize_query,
     page_exists,
@@ -82,6 +83,71 @@ class TestGetCollection:
     def test_collection_is_empty_on_creation(self, tmp_path):
         col = get_collection(tmp_path)
         assert col.count() == 0
+
+
+class TestStoreMetadataCompatibility:
+    def test_initializes_metadata_when_missing(self, tmp_path):
+        metadata = ensure_store_compatibility(
+            tmp_path,
+            model="gemini-embedding-2",
+            dimensions=3072,
+        )
+        assert metadata["provider"] == "google-genai"
+        assert metadata["schema_version"] == "2"
+
+        loaded = load_store_metadata(tmp_path)
+        assert loaded == metadata
+
+    def test_raises_on_provider_mismatch(self, tmp_path):
+        (tmp_path / "store_meta.json").write_text(
+            json.dumps(
+                {
+                    "provider": "other-provider",
+                    "schema_version": "2",
+                    "model": "gemini-embedding-2",
+                    "dimensions": 3072,
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        with pytest.raises(RuntimeError, match="Store metadata mismatch"):
+            ensure_store_compatibility(
+                tmp_path,
+                model="gemini-embedding-2",
+                dimensions=3072,
+            )
+
+    def test_updates_model_without_failing(self, tmp_path):
+        (tmp_path / "store_meta.json").write_text(
+            json.dumps(
+                {
+                    "provider": "google-genai",
+                    "schema_version": "2",
+                    "model": "old-model",
+                    "dimensions": 3072,
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        ensure_store_compatibility(
+            tmp_path,
+            model="gemini-embedding-2",
+            dimensions=3072,
+        )
+        updated = load_store_metadata(tmp_path)
+        assert updated is not None
+        assert updated["model"] == "gemini-embedding-2"
+
+    def test_raises_on_corrupt_metadata_file(self, tmp_path):
+        (tmp_path / "store_meta.json").write_text("not-json", encoding="utf-8")
+        with pytest.raises(RuntimeError, match="Corrupt store metadata"):
+            ensure_store_compatibility(
+                tmp_path,
+                model="gemini-embedding-2",
+                dimensions=3072,
+            )
 
 
 # ---------------------------------------------------------------------------

@@ -382,6 +382,30 @@ class TestEmbedAllPdfs:
                 api_key="k",
             )
 
+    @patch(
+        "vlmembed.store.ensure_store_compatibility",
+        side_effect=RuntimeError("Store metadata mismatch"),
+    )
+    @patch("vlmembed.store.get_collection")
+    def test_store_metadata_mismatch_fails_fast(
+        self, mock_get_coll, mock_ensure_compat, tmp_path
+    ):
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        _make_pdf(docs_dir / "in.pdf", num_pages=1)
+
+        with patch("vlmembed.embed.dotenv.load_dotenv"):
+            with pytest.raises(RuntimeError, match="Store metadata mismatch"):
+                embed_all_pdfs(
+                    docs_dir,
+                    tmp_path / "embed",
+                    api_key="k",
+                    max_workers=1,
+                )
+
+        mock_ensure_compat.assert_called_once()
+        mock_get_coll.assert_not_called()
+
     def test_empty_docs_dir_returns_empty_list(self, tmp_path):
         docs_dir = tmp_path / "docs"
         docs_dir.mkdir()
@@ -490,7 +514,7 @@ class TestEmbedAllPdfs:
     ):
         docs_dir = tmp_path / "docs"
         docs_dir.mkdir()
-        pdf = _make_pdf(docs_dir / "d.pdf", num_pages=1)
+        _make_pdf(docs_dir / "d.pdf", num_pages=1)
         embed_dir = tmp_path / "embed"
 
         mock_get_coll.return_value = MagicMock()

@@ -28,6 +28,7 @@ from vlmembed.contract import (
     PageMetadata,
     ProjectPathStatus,
     SearchResult,
+    StoreMetadata,
     get_db_dir,
     get_doc_images_dir,
     get_images_dir,
@@ -180,3 +181,13 @@ class TestTypedDicts:
             "distance": 0.05,
         }
         assert result["distance"] == 0.05
+
+    def test_store_metadata_structure(self):
+        metadata: StoreMetadata = {
+            "provider": "google-genai",
+            "schema_version": "2",
+            "model": "gemini-embedding-2",
+            "dimensions": 3072,
+        }
+        assert metadata["provider"] == "google-genai"
+        assert metadata["dimensions"] == 3072
