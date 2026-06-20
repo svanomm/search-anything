@@ -1,6 +1,6 @@
-# vlm-embed
+# search-anything
 
-`vlm-embed` builds local multimodal embeddings from files under `docs/` and serves a semantic search UI on top of a ChromaDB index.
+`search-anything` builds local multimodal embeddings from files under `docs/` and serves a semantic search UI on top of a ChromaDB index.
 
 It uses the Google `gemini-embedding-2` model through `google-genai`, supports recursive ingestion, and stores vectors plus local metadata under `embeddings/`.
 
