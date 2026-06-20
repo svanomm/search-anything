@@ -357,7 +357,7 @@ class TestEmbedAllPdfs:
         docs_dir.mkdir()
         with patch.dict(os.environ, {}, clear=True):
             with patch("vlmembed.embed.dotenv.load_dotenv"):
-                with pytest.raises(ValueError, match="OPENROUTER_API_KEY"):
+                with pytest.raises(ValueError, match="GOOGLE_API_KEY"):
                     embed_all_pdfs(docs_dir, tmp_path / "embed", api_key=None)
 
     def test_invalid_max_workers_raises(self, tmp_path):

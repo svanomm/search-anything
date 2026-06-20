@@ -15,7 +15,9 @@ from vlmembed.contract import (
     DEFAULT_DIMENSIONS,
     DEFAULT_EMBED_DIR,
     DEFAULT_MODEL,
+    DEFAULT_USE_ENTERPRISE,
     ENV_API_KEY,
+    ENV_USE_ENTERPRISE,
 )
 from vlmembed.embed import embed_text_query
 from vlmembed.store import (
@@ -92,7 +94,7 @@ def make_search_fn(
 
     Args:
         collection: ChromaDB ``Collection`` object.
-        api_key: OpenRouter API key.
+        api_key: Google API key.
         model: Embedding model identifier.
         dimensions: Embedding dimensionality.
         embed_dir: Root embeddings directory used to persist the query cache.
@@ -150,7 +152,7 @@ def build_search_app(
 
     Args:
         embed_dir: Root embeddings directory containing the ChromaDB database.
-        api_key: OpenRouter API key used to embed the text query.
+        api_key: Google API key used to embed the text query.
         model: Embedding model identifier.
         dimensions: Embedding dimensionality.
 
@@ -226,13 +228,15 @@ def launch_search_app(
 
     Args:
         embed_dir: Root embeddings directory.
-        api_key: OpenRouter API key.  Falls back to the ``OPENROUTER_API_KEY``
+        api_key: Google API key.  Falls back to the ``GOOGLE_API_KEY``
             environment variable when empty.
         model: Embedding model identifier.
         dimensions: Embedding dimensionality.
         port: Local port on which to serve the Gradio app.
     """
     dotenv.load_dotenv()
+    if DEFAULT_USE_ENTERPRISE:
+        os.environ.setdefault(ENV_USE_ENTERPRISE, "True")
     if not api_key:
         api_key = os.environ.get(ENV_API_KEY, "")
 

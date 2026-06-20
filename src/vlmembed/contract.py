@@ -21,7 +21,8 @@ DB_SUBDIR = Path("db")
 # Environment variable names
 # ---------------------------------------------------------------------------
 
-ENV_API_KEY = "OPENROUTER_API_KEY"
+ENV_API_KEY = "GOOGLE_API_KEY"
+ENV_USE_ENTERPRISE = "GOOGLE_GENAI_USE_ENTERPRISE"
 ENV_MODEL = "VLMEMBED_MODEL"
 ENV_DPI = "VLMEMBED_DPI"
 ENV_IMAGE_FORMAT = "VLMEMBED_IMAGE_FORMAT"
@@ -30,14 +31,19 @@ ENV_MAX_WORKERS = "VLMEMBED_MAX_WORKERS"
 ENV_MAX_RETRIES = "VLMEMBED_MAX_RETRIES"
 
 # Hard-coded defaults
-DEFAULT_MODEL = "google/gemini-embedding-2-preview"
+DEFAULT_MODEL = "gemini-embedding-2"
 DEFAULT_DPI = 300
 DEFAULT_IMAGE_FORMAT = "png"
 DEFAULT_DIMENSIONS = 3072
 DEFAULT_MAX_WORKERS = 4
 DEFAULT_MAX_RETRIES = 3
+DEFAULT_USE_ENTERPRISE = True
 
-# OpenRouter endpoint
+# Provider and schema constants
+EMBEDDING_PROVIDER = "google-genai"
+STORE_SCHEMA_VERSION = "2"
+
+# Transitional constant retained until provider call migration is complete.
 OPENROUTER_EMBEDDINGS_URL = "https://openrouter.ai/api/v1/embeddings"
 
 # ---------------------------------------------------------------------------

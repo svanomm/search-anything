@@ -23,6 +23,7 @@ from vlmembed.contract import (
     DEFAULT_MAX_RETRIES,
     DEFAULT_MAX_WORKERS,
     DEFAULT_MODEL,
+    ENV_API_KEY,
     OPENROUTER_EMBEDDINGS_URL,
     EmbedResult,
     PageMetadata,
@@ -245,7 +246,7 @@ def embed_all_pdfs(
     Args:
         docs_dir: Directory containing source PDF files.
         embed_dir: Root directory for embedding artefacts (image cache + DB).
-        api_key: OpenRouter API key; overrides the ``OPENROUTER_API_KEY``
+        api_key: Google API key; overrides the ``GOOGLE_API_KEY``
             environment variable and any ``.env`` file.
         model: Embedding model identifier.
         dpi: Page render resolution in dots per inch.
@@ -270,11 +271,11 @@ def embed_all_pdfs(
         raise ValueError(f"max_workers must be >= 1, got {max_workers}")
 
     dotenv.load_dotenv()
-    resolved_key = (api_key or os.environ.get("OPENROUTER_API_KEY", "")).strip()
+    resolved_key = (api_key or os.environ.get(ENV_API_KEY, "")).strip()
     if not resolved_key:
         raise ValueError(
-            "OPENROUTER_API_KEY is required. Set it in your environment, "
-            "pass --api-key, or add OPENROUTER_API_KEY=<key> to a .env file."
+            f"{ENV_API_KEY} is required. Set it in your environment, "
+            f"pass --api-key, or add {ENV_API_KEY}=<key> to a .env file."
         )
 
     docs_dir = Path(docs_dir)

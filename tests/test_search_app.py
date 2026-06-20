@@ -183,7 +183,7 @@ class TestBuildSearchApp:
         demo = build_search_app(
             embed_dir=tmp_path,
             api_key="test-key",
-            model="google/gemini-embedding-2-preview",
+            model="gemini-embedding-2",
             dimensions=8,
         )
         assert isinstance(demo, gr.Blocks)
@@ -302,10 +302,10 @@ class TestLaunchSearchApp:
     def test_reads_api_key_from_env_when_not_provided(
         self, mock_dotenv, mock_col, mock_launch, tmp_path, monkeypatch
     ):
-        """When api_key is empty, OPENROUTER_API_KEY env var is used instead."""
+        """When api_key is empty, GOOGLE_API_KEY env var is used instead."""
         from vlmembed.search_app import launch_search_app, make_search_fn
 
-        monkeypatch.setenv("OPENROUTER_API_KEY", "env-key")
+        monkeypatch.setenv("GOOGLE_API_KEY", "env-key")
         col = _mock_collection()
         mock_col.return_value = col
 

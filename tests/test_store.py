@@ -266,7 +266,7 @@ class TestQueryCachePersistence:
 
 
 class TestGetSetCachedEmbedding:
-    _MODEL = "google/gemini-embedding-2-preview"
+    _MODEL = "gemini-embedding-2"
     _DIM = 8
     _EMB = [0.1] * 8
 

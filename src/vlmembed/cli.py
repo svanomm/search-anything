@@ -18,6 +18,7 @@ from vlmembed.contract import (
     DEFAULT_MAX_RETRIES,
     DEFAULT_MAX_WORKERS,
     DEFAULT_MODEL,
+    DEFAULT_USE_ENTERPRISE,
     ENV_API_KEY,
     ENV_DIMENSIONS,
     ENV_DPI,
@@ -25,6 +26,7 @@ from vlmembed.contract import (
     ENV_MAX_RETRIES,
     ENV_MAX_WORKERS,
     ENV_MODEL,
+    ENV_USE_ENTERPRISE,
     ProjectPathStatus,
     get_project_directories,
 )
@@ -76,6 +78,12 @@ def _resolve_str(cli_val: str | None, env_key: str, default: str) -> str:
     if cli_val:
         return cli_val
     return os.environ.get(env_key) or default
+
+
+def _ensure_google_enterprise_env() -> None:
+    """Ensure the Google enterprise mode env var has a stable default."""
+    if DEFAULT_USE_ENTERPRISE:
+        os.environ.setdefault(ENV_USE_ENTERPRISE, "True")
 
 
 def _print_path_status(label: str, path: Path, exists: bool) -> None:
@@ -180,6 +188,7 @@ def cmd_embed(args: argparse.Namespace) -> int:
     from vlmembed.embed import embed_all_pdfs  # noqa: PLC0415
 
     dotenv.load_dotenv()
+    _ensure_google_enterprise_env()
 
     api_key = _resolve_str(args.api_key, ENV_API_KEY, "")
     model = _resolve_str(args.model, ENV_MODEL, DEFAULT_MODEL)
@@ -251,6 +260,7 @@ def cmd_search(args: argparse.Namespace) -> int:
     # launch_search_app calls dotenv.load_dotenv() internally; load it here
     # too so that env-var fallback for model/dimensions works correctly.
     dotenv.load_dotenv()
+    _ensure_google_enterprise_env()
 
     # api_key: pass as-is (empty string means launch_search_app will use env).
     api_key = args.api_key or ""
@@ -372,7 +382,7 @@ def _interactive_menu() -> int:
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="vlmembed",
-        description="Multimodal PDF embedding and semantic search via OpenRouter and ChromaDB.",
+        description="Multimodal embedding and semantic search via Google Gemini API and ChromaDB.",
     )
     sub = parser.add_subparsers(dest="subcommand")
 
@@ -393,7 +403,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p_embed = sub.add_parser("embed", help="Embed all PDFs into the vector store.")
     p_embed.add_argument("--docs-dir", default=str(DEFAULT_DOCS_DIR))
     p_embed.add_argument("--embed-dir", default=str(DEFAULT_EMBED_DIR))
-    p_embed.add_argument("--api-key", default=None, help="OpenRouter API key.")
+    p_embed.add_argument("--api-key", default=None, help="Google API key.")
     p_embed.add_argument(
         "--model",
         default=None,
@@ -439,7 +449,7 @@ def _build_parser() -> argparse.ArgumentParser:
     # --- search ---
     p_search = sub.add_parser("search", help="Launch the Gradio semantic search UI.")
     p_search.add_argument("--embed-dir", default=str(DEFAULT_EMBED_DIR))
-    p_search.add_argument("--api-key", default=None, help="OpenRouter API key.")
+    p_search.add_argument("--api-key", default=None, help="Google API key.")
     p_search.add_argument(
         "--model",
         default=None,

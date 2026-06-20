@@ -13,6 +13,8 @@ from vlmembed.contract import (
     DEFAULT_MAX_RETRIES,
     DEFAULT_MAX_WORKERS,
     DEFAULT_MODEL,
+    DEFAULT_USE_ENTERPRISE,
+    EMBEDDING_PROVIDER,
     ENV_API_KEY,
     ENV_DIMENSIONS,
     ENV_DPI,
@@ -20,7 +22,9 @@ from vlmembed.contract import (
     ENV_MAX_RETRIES,
     ENV_MAX_WORKERS,
     ENV_MODEL,
+    ENV_USE_ENTERPRISE,
     OPENROUTER_EMBEDDINGS_URL,
+    STORE_SCHEMA_VERSION,
     EmbedResult,
     PageMetadata,
     ProjectPathStatus,
@@ -40,7 +44,7 @@ class TestDefaults:
         assert DEFAULT_EMBED_DIR == Path("embeddings")
 
     def test_model(self):
-        assert DEFAULT_MODEL == "google/gemini-embedding-2-preview"
+        assert DEFAULT_MODEL == "gemini-embedding-2"
 
     def test_dpi(self):
         assert DEFAULT_DPI == 300
@@ -57,13 +61,25 @@ class TestDefaults:
     def test_max_retries(self):
         assert DEFAULT_MAX_RETRIES == 3
 
+    def test_use_enterprise_default(self):
+        assert DEFAULT_USE_ENTERPRISE is True
+
+    def test_embedding_provider(self):
+        assert EMBEDDING_PROVIDER == "google-genai"
+
+    def test_schema_version(self):
+        assert STORE_SCHEMA_VERSION == "2"
+
     def test_openrouter_url(self):
         assert OPENROUTER_EMBEDDINGS_URL == "https://openrouter.ai/api/v1/embeddings"
 
 
 class TestEnvVarNames:
     def test_api_key(self):
-        assert ENV_API_KEY == "OPENROUTER_API_KEY"
+        assert ENV_API_KEY == "GOOGLE_API_KEY"
+
+    def test_use_enterprise(self):
+        assert ENV_USE_ENTERPRISE == "GOOGLE_GENAI_USE_ENTERPRISE"
 
     def test_model(self):
         assert ENV_MODEL == "VLMEMBED_MODEL"
