@@ -288,7 +288,7 @@ def cmd_search(args: argparse.Namespace) -> int:
 
 
 def cmd_estimate_cost(args: argparse.Namespace) -> int:
-    """Estimate the cost to embed all PDFs in the docs directory."""
+    """Estimate the cost to embed supported files in the docs directory."""
     from vlmembed.estimate_cost import estimate_cost  # noqa: PLC0415
 
     docs_dir = Path(args.docs_dir)
@@ -297,20 +297,36 @@ def cmd_estimate_cost(args: argparse.Namespace) -> int:
     print(f"\n{_BOLD}Estimating embedding cost…{_R}\n")
     result = estimate_cost(docs_dir=docs_dir, dpi=dpi)
 
-    if not result["per_file"]:
-        print(f"  {_YELLOW}No PDFs found in {docs_dir}{_R}\n")
+    modalities = result.get("modalities", {})
+    if not any(modalities.values()) and not result["per_file"]:
+        print(f"  {_YELLOW}No supported files found in {docs_dir}{_R}\n")
         return 0
 
     for filename, pages in result["per_file"].items():
-        print(f"  {_DIM}{filename}:{_R} {pages} page(s)")
+        print(f"  {_DIM}[pdf]{_R} {filename}: {pages} page(s)")
 
-    print(f"\n  Total pages:     {_BOLD}{result['pages']}{_R}")
-    print(f"  Tokens/page:     {_BOLD}{result['tokens_per_page']:,}{_R}")
-    print(f"  Total tokens:    {_BOLD}{result['total_tokens']:,}{_R}")
+    print("\n  Modality unit counts:")
+    print(f"    PDFs (pages):  {_BOLD}{modalities.get('pdf_pages', 0)}{_R}")
+    print(f"    Images:        {_BOLD}{modalities.get('images', 0)}{_R}")
+    print(f"    Text tokens:   {_BOLD}{modalities.get('text_tokens', 0):,}{_R}")
+    print(f"    Audio seconds: {_BOLD}{modalities.get('audio_seconds', 0):,.2f}{_R}")
+    print(f"    Video frames:  {_BOLD}{modalities.get('video_frames', 0):,}{_R}")
+
+    token_breakdown = result.get("token_breakdown", {})
+    per_modality_usd = result.get("per_modality_usd", {})
+    print("\n  Token-equivalent breakdown:")
+    for modality in ("pdf", "image", "text", "audio", "video"):
+        tokens = token_breakdown.get(modality, 0)
+        cost = per_modality_usd.get(modality, 0.0)
+        print(
+            f"    {modality:>5}: {_BOLD}{tokens:,}{_R} tokens (~${cost:.4f})"
+        )
+
+    print(f"\n  Total tokens:    {_BOLD}{result['total_tokens']:,}{_R}")
     print(f"  Estimated cost:  {_BOLD}{_GREEN}${result['estimated_usd']:.4f}{_R}")
     print(
-        f"\n  {_DIM}Disclaimer: estimate based on ~$0.45/M tokens at {dpi} DPI "
-        f"(US Letter page size). Actual cost may vary.{_R}\n"
+        f"\n  {_DIM}Disclaimer: estimate uses midpoint token assumptions and "
+        f"~${0.2}/M token-equivalents. Actual provider billing may vary.{_R}\n"
     )
     return 0
 

@@ -576,6 +576,27 @@ class TestCmdEstimateCost:
             "tokens_per_page": 58593,
             "total_tokens": 175779,
             "estimated_usd": 0.079,
+            "modalities": {
+                "pdf_pages": 3,
+                "images": 1,
+                "text_tokens": 100,
+                "audio_seconds": 0.0,
+                "video_frames": 0,
+            },
+            "token_breakdown": {
+                "pdf": 774,
+                "image": 258,
+                "text": 100,
+                "audio": 0,
+                "video": 0,
+            },
+            "per_modality_usd": {
+                "pdf": 0.0001548,
+                "image": 0.0000516,
+                "text": 0.00002,
+                "audio": 0.0,
+                "video": 0.0,
+            },
         }
         rv = return_value if return_value is not None else default_return
         with patch(self._PATCH, return_value=rv) as mock_fn:
@@ -594,7 +615,34 @@ class TestCmdEstimateCost:
 
     def test_returns_zero_when_no_pdfs(self):
         args = self._est_ns()
-        rv = {"per_file": {}, "pages": 0, "tokens_per_page": 58593, "total_tokens": 0, "estimated_usd": 0.0}
+        rv = {
+            "per_file": {},
+            "pages": 0,
+            "tokens_per_page": 58593,
+            "total_tokens": 0,
+            "estimated_usd": 0.0,
+            "modalities": {
+                "pdf_pages": 0,
+                "images": 0,
+                "text_tokens": 0,
+                "audio_seconds": 0.0,
+                "video_frames": 0,
+            },
+            "token_breakdown": {
+                "pdf": 0,
+                "image": 0,
+                "text": 0,
+                "audio": 0,
+                "video": 0,
+            },
+            "per_modality_usd": {
+                "pdf": 0.0,
+                "image": 0.0,
+                "text": 0.0,
+                "audio": 0.0,
+                "video": 0.0,
+            },
+        }
         rc, _ = self._run(args, return_value=rv)
         assert rc == 0
 
