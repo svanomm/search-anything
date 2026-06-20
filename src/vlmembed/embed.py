@@ -1,4 +1,4 @@
-"""PDF rendering and Gemini Embedding 2 multimodal page embedding."""
+"""Multimodal document ingestion and Gemini Embedding 2 embedding helpers."""
 
 from __future__ import annotations
 
@@ -7,7 +7,9 @@ import hashlib
 import json
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 import dotenv
 import fitz
@@ -32,6 +34,195 @@ from vlmembed.contract import (
     get_doc_images_dir,
 )
 
+_IMAGE_MIME_BY_SUFFIX = {
+    ".avif": "image/avif",
+    ".bmp": "image/bmp",
+    ".heic": "image/heic",
+    ".heif": "image/heif",
+    ".jpeg": "image/jpeg",
+    ".jpg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+}
+
+_AUDIO_MIME_BY_SUFFIX = {
+    ".mp3": "audio/mp3",
+    ".wav": "audio/wav",
+}
+
+_VIDEO_MIME_BY_SUFFIX = {
+    ".avi": "video/x-msvideo",
+    ".mkv": "video/x-matroska",
+    ".mov": "video/quicktime",
+    ".mp4": "video/mp4",
+    ".webm": "video/webm",
+}
+
+_TEXT_SUFFIXES = {".md", ".markdown", ".txt"}
+_PDF_SUFFIXES = {".pdf"}
+_SUPPORTED_SUFFIXES = (
+    _PDF_SUFFIXES
+    | _TEXT_SUFFIXES
+    | set(_IMAGE_MIME_BY_SUFFIX)
+    | set(_AUDIO_MIME_BY_SUFFIX)
+    | set(_VIDEO_MIME_BY_SUFFIX)
+)
+
+_TEXT_CHUNK_SIZE = 1500
+_TEXT_CHUNK_OVERLAP = 200
+_MEDIA_SEGMENT_COUNT = 3
+_VIDEO_SEGMENT_WINDOWS = (("0s", "40s"), ("40s", "80s"), ("80s", "120s"))
+
+
+@dataclass(frozen=True)
+class _PendingEmbedTask:
+    page_id: str
+    source_path: Path
+    doc_hash: str
+    kind: Literal["pdf", "image", "text", "audio", "video"]
+    ordinal: int
+    images_dir: Path | None = None
+    text_chunk: str | None = None
+    mime_type: str | None = None
+    byte_range: tuple[int, int] | None = None
+    video_offsets: tuple[str, str] | None = None
+
+
+def _iter_supported_files(docs_dir: Path) -> list[Path]:
+    """Return all supported files under *docs_dir*, recursively."""
+    return sorted(
+        path
+        for path in docs_dir.rglob("*")
+        if path.is_file() and path.suffix.lower() in _SUPPORTED_SUFFIXES
+    )
+
+
+def _resolve_media_mime(path: Path) -> str:
+    """Return a best-effort MIME type for supported non-text media files."""
+    suffix = path.suffix.lower()
+    if suffix in _IMAGE_MIME_BY_SUFFIX:
+        return _IMAGE_MIME_BY_SUFFIX[suffix]
+    if suffix in _AUDIO_MIME_BY_SUFFIX:
+        return _AUDIO_MIME_BY_SUFFIX[suffix]
+    if suffix in _VIDEO_MIME_BY_SUFFIX:
+        return _VIDEO_MIME_BY_SUFFIX[suffix]
+    raise ValueError(f"Unsupported media extension: {suffix}")
+
+
+def _fallback_char_chunks(text: str, chunk_size: int) -> list[str]:
+    """Split *text* into fixed-size chunks as a robust fallback."""
+    chunks: list[str] = []
+    start = 0
+    while start < len(text):
+        end = min(start + chunk_size, len(text))
+        chunk = text[start:end].strip()
+        if chunk:
+            chunks.append(chunk)
+        start = end
+    return chunks
+
+
+def _apply_text_overlap(chunks: list[str], overlap: int) -> list[str]:
+    """Prefix each chunk with trailing context from the previous chunk."""
+    if overlap <= 0 or len(chunks) <= 1:
+        return chunks
+
+    merged: list[str] = []
+    previous_source = ""
+    for chunk in chunks:
+        current = chunk.strip()
+        if not current:
+            continue
+        if previous_source:
+            prefix = previous_source[-overlap:]
+            if prefix and not current.startswith(prefix):
+                current = f"{prefix}\n{current}"
+        merged.append(current)
+        previous_source = chunk
+    return merged
+
+
+def _chunk_text_content(text: str) -> list[str]:
+    """Chunk text with Chonkie's markdown recursive chunker."""
+    clean_text = text.strip()
+    if not clean_text:
+        return []
+
+    chunks: list[str] = []
+    try:
+        from chonkie import RecursiveChunker  # noqa: PLC0415
+
+        try:
+            chunker = RecursiveChunker.from_recipe(
+                name="markdown",
+                lang="en",
+                tokenizer="character",
+                chunk_size=_TEXT_CHUNK_SIZE,
+                min_characters_per_chunk=24,
+            )
+        except Exception:  # noqa: BLE001
+            chunker = RecursiveChunker(
+                tokenizer="character",
+                chunk_size=_TEXT_CHUNK_SIZE,
+                min_characters_per_chunk=24,
+            )
+
+        raw_chunks = chunker.chunk(clean_text) if hasattr(chunker, "chunk") else chunker(clean_text)
+        for raw_chunk in raw_chunks:
+            if isinstance(raw_chunk, str):
+                value = raw_chunk
+            else:
+                value = getattr(raw_chunk, "text", str(raw_chunk))
+            value = value.strip()
+            if value:
+                chunks.append(value)
+    except Exception:  # noqa: BLE001
+        chunks = _fallback_char_chunks(clean_text, _TEXT_CHUNK_SIZE)
+
+    return _apply_text_overlap(chunks, _TEXT_CHUNK_OVERLAP)
+
+
+def _chunk_text_file(path: Path) -> list[str]:
+    """Read and chunk a text or markdown file."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        text = path.read_text(encoding="utf-8", errors="ignore")
+    return _chunk_text_content(text)
+
+
+def _build_audio_byte_windows(total_size: int) -> list[tuple[int, int]]:
+    """Return beginning/middle/end byte windows for audio segmentation."""
+    if total_size <= 0:
+        return []
+    if total_size <= _MEDIA_SEGMENT_COUNT:
+        return [(0, total_size)]
+
+    window = max(total_size // _MEDIA_SEGMENT_COUNT, 1)
+    starts = [
+        0,
+        max((total_size - window) // 2, 0),
+        max(total_size - window, 0),
+    ]
+
+    windows: list[tuple[int, int]] = []
+    seen: set[tuple[int, int]] = set()
+    for start in starts:
+        end = min(start + window, total_size)
+        if end <= start:
+            continue
+        item = (start, end)
+        if item not in seen:
+            seen.add(item)
+            windows.append(item)
+    return windows
+
+
+def _format_document_text(text: str, title: str | None = None) -> str:
+    """Format text input using Gemini retrieval guidance for documents."""
+    normalized_title = (title or "").strip() or "none"
+    return f"title: {normalized_title} | text: {text}"
+
 
 def _build_genai_client(api_key: str):
     """Return a configured google-genai client for embedding requests."""
@@ -46,7 +237,7 @@ def _extract_embedding_values(response) -> list[float]:
 
 
 def compute_doc_hash(pdf_path: Path | str) -> str:
-    """Return the SHA-256 hex digest of a PDF file's raw bytes.
+    """Return the SHA-256 hex digest of a file's raw bytes.
 
     Args:
         pdf_path: Path to the PDF file.
@@ -154,6 +345,7 @@ def embed_image_page(
     api_key: str,
     dimensions: int,
     image_format: str = DEFAULT_IMAGE_FORMAT,
+    mime_type: str | None = None,
 ) -> list[float]:
     """Embed a single page image using the Google Gemini API.
 
@@ -167,7 +359,7 @@ def embed_image_page(
     Returns:
         Embedding vector as a list of floats.
     """
-    mime = "image/jpeg" if image_format == "jpeg" else "image/png"
+    mime = mime_type or ("image/jpeg" if image_format == "jpeg" else "image/png")
     image_bytes = base64.b64decode(base64_str)
     content = types.Content(
         parts=[
@@ -177,6 +369,58 @@ def embed_image_page(
             )
         ]
     )
+    client = _build_genai_client(api_key)
+    response = client.models.embed_content(
+        model=model,
+        contents=[content],
+        config=types.EmbedContentConfig(output_dimensionality=dimensions),
+    )
+    return _extract_embedding_values(response)
+
+
+def embed_text_document(
+    text: str,
+    *,
+    title: str,
+    model: str,
+    api_key: str,
+    dimensions: int,
+) -> list[float]:
+    """Embed document text with Gemini-recommended retrieval formatting."""
+    prepared = _format_document_text(text, title=title)
+    client = _build_genai_client(api_key)
+    response = client.models.embed_content(
+        model=model,
+        contents=[prepared],
+        config=types.EmbedContentConfig(output_dimensionality=dimensions),
+    )
+    return _extract_embedding_values(response)
+
+
+def _embed_media_part(
+    file_bytes: bytes,
+    *,
+    mime_type: str,
+    model: str,
+    api_key: str,
+    dimensions: int,
+    segment_label: str | None = None,
+    video_offsets: tuple[str, str] | None = None,
+) -> list[float]:
+    """Embed a non-text media part (image/audio/video)."""
+    media_part = types.Part.from_bytes(data=file_bytes, mime_type=mime_type)
+    if video_offsets is not None:
+        media_part.video_metadata = types.VideoMetadata(
+            start_offset=video_offsets[0],
+            end_offset=video_offsets[1],
+            fps=1.0,
+        )
+
+    parts = [media_part]
+    if segment_label:
+        parts.insert(0, types.Part.from_text(text=f"segment: {segment_label}"))
+
+    content = types.Content(parts=parts)
     client = _build_genai_client(api_key)
     response = client.models.embed_content(
         model=model,
@@ -229,11 +473,11 @@ def embed_all_pdfs(
     max_workers: int = DEFAULT_MAX_WORKERS,
     max_retries: int = DEFAULT_MAX_RETRIES,
 ) -> list[EmbedResult]:
-    """Embed all unprocessed PDF pages in *docs_dir* into the ChromaDB store.
+    """Embed all unprocessed supported files in *docs_dir* into ChromaDB.
 
-    Pages that are already present in the vector store (matched by their
-    composite page ID ``{doc_hash}_{page_idx}``) are skipped, enabling
-    fast incremental updates when new PDFs are added.
+    Supported types are discovered recursively under *docs_dir*:
+    PDF, image, text/markdown, audio, and video. Existing vectors are skipped
+    by stable IDs so the ingestion remains incremental across repeated runs.
 
     Args:
         docs_dir: Directory containing source PDF files.
@@ -241,20 +485,20 @@ def embed_all_pdfs(
         api_key: Google API key; overrides the ``GOOGLE_API_KEY``
             environment variable and any ``.env`` file.
         model: Embedding model identifier.
-        dpi: Page render resolution in dots per inch.
-        image_format: Image format for rendering (``"png"`` or ``"jpeg"``).
+        dpi: PDF page render resolution in dots per inch.
+        image_format: Image format for PDF rendering (``"png"`` or ``"jpeg"``).
         dimensions: Number of embedding dimensions to request.
-        max_workers: Thread pool size for parallel page embedding.
-        max_retries: Number of attempts per page before raising an error.
+        max_workers: Thread pool size for parallel embedding.
+        max_retries: Number of attempts per task before raising an error.
 
     Returns:
         List of :class:`~vlmembed.contract.EmbedResult` dicts for newly
-        embedded pages (already-present pages are not included).
+        embedded tasks (already-present tasks are not included).
 
     Raises:
         ValueError: If *api_key* cannot be resolved or *max_workers* < 1.
         FileNotFoundError: If *docs_dir* does not exist.
-        RuntimeError: If any page fails after all retries are exhausted.
+        RuntimeError: If any task fails after all retries are exhausted.
     """
     if max_workers < 1:
         raise ValueError(f"max_workers must be >= 1, got {max_workers}")
@@ -276,8 +520,8 @@ def embed_all_pdfs(
     if not docs_dir.exists():
         raise FileNotFoundError(f"Docs directory not found: {docs_dir}")
 
-    pdf_files = sorted(docs_dir.glob("*.pdf"))
-    if not pdf_files:
+    source_files = _iter_supported_files(docs_dir)
+    if not source_files:
         return []
 
     settings_hash = compute_settings_hash(
@@ -289,47 +533,186 @@ def embed_all_pdfs(
 
     collection = _store.get_collection(embed_dir)
 
-    # Build the list of pages that are not yet in the store.
-    pending: list[tuple[Path, int, str, str, Path]] = []
-    for pdf_path in pdf_files:
-        doc_hash = compute_doc_hash(pdf_path)
-        images_dir = get_doc_images_dir(embed_dir, doc_hash)
-        with fitz.open(pdf_path) as doc:
-            page_count = len(doc)
-        for page_idx in range(page_count):
-            page_id = f"{doc_hash}_{page_idx}"
+    # Build all pending tasks for recursive multimodal ingestion.
+    pending: list[_PendingEmbedTask] = []
+    for source_path in source_files:
+        suffix = source_path.suffix.lower()
+        doc_hash = compute_doc_hash(source_path)
+
+        if suffix in _PDF_SUFFIXES:
+            images_dir = get_doc_images_dir(embed_dir, doc_hash)
+            with fitz.open(source_path) as doc:
+                page_count = len(doc)
+            for page_idx in range(page_count):
+                page_id = f"{doc_hash}_{page_idx}"
+                if not _store.page_exists(collection, page_id):
+                    pending.append(
+                        _PendingEmbedTask(
+                            page_id=page_id,
+                            source_path=source_path,
+                            doc_hash=doc_hash,
+                            kind="pdf",
+                            ordinal=page_idx,
+                            images_dir=images_dir,
+                        )
+                    )
+            continue
+
+        if suffix in _TEXT_SUFFIXES:
+            for idx, chunk in enumerate(_chunk_text_file(source_path)):
+                page_id = f"{doc_hash}_txt_{idx}"
+                if not _store.page_exists(collection, page_id):
+                    pending.append(
+                        _PendingEmbedTask(
+                            page_id=page_id,
+                            source_path=source_path,
+                            doc_hash=doc_hash,
+                            kind="text",
+                            ordinal=idx,
+                            text_chunk=chunk,
+                        )
+                    )
+            continue
+
+        if suffix in _IMAGE_MIME_BY_SUFFIX:
+            page_id = f"{doc_hash}_img_0"
             if not _store.page_exists(collection, page_id):
-                pending.append((pdf_path, page_idx, doc_hash, page_id, images_dir))
+                pending.append(
+                    _PendingEmbedTask(
+                        page_id=page_id,
+                        source_path=source_path,
+                        doc_hash=doc_hash,
+                        kind="image",
+                        ordinal=0,
+                        mime_type=_resolve_media_mime(source_path),
+                    )
+                )
+            continue
+
+        if suffix in _AUDIO_MIME_BY_SUFFIX:
+            windows = _build_audio_byte_windows(source_path.stat().st_size)
+            for idx, byte_range in enumerate(windows):
+                page_id = f"{doc_hash}_aud_{idx}"
+                if not _store.page_exists(collection, page_id):
+                    pending.append(
+                        _PendingEmbedTask(
+                            page_id=page_id,
+                            source_path=source_path,
+                            doc_hash=doc_hash,
+                            kind="audio",
+                            ordinal=idx,
+                            mime_type=_resolve_media_mime(source_path),
+                            byte_range=byte_range,
+                        )
+                    )
+            continue
+
+        if suffix in _VIDEO_MIME_BY_SUFFIX:
+            for idx, offsets in enumerate(_VIDEO_SEGMENT_WINDOWS):
+                page_id = f"{doc_hash}_vid_{idx}"
+                if not _store.page_exists(collection, page_id):
+                    pending.append(
+                        _PendingEmbedTask(
+                            page_id=page_id,
+                            source_path=source_path,
+                            doc_hash=doc_hash,
+                            kind="video",
+                            ordinal=idx,
+                            mime_type=_resolve_media_mime(source_path),
+                            video_offsets=offsets,
+                        )
+                    )
 
     if not pending:
         return []
 
-    def _embed_task(
-        task: tuple[Path, int, str, str, Path],
-    ) -> EmbedResult:
-        pdf_path, page_idx, doc_hash, page_id, task_images_dir = task
+    def _embed_task(task: _PendingEmbedTask) -> EmbedResult:
         last_exc: Exception | None = None
         for attempt in range(max_retries):
             try:
-                base64_str, image_path = render_page_image(
-                    pdf_path, page_idx, dpi, image_format, task_images_dir
-                )
-                embedding = embed_image_page(
-                    base64_str,
-                    model=model,
-                    api_key=resolved_key,
-                    dimensions=dimensions,
-                    image_format=image_format,
-                )
+                image_cache_path = ""
+                if task.kind == "pdf":
+                    base64_str, image_path = render_page_image(
+                        task.source_path,
+                        task.ordinal,
+                        dpi,
+                        image_format,
+                        task.images_dir,
+                    )
+                    embedding = embed_image_page(
+                        base64_str,
+                        model=model,
+                        api_key=resolved_key,
+                        dimensions=dimensions,
+                        image_format=image_format,
+                    )
+                    image_cache_path = str(image_path)
+                elif task.kind == "image":
+                    base64_str = base64.b64encode(task.source_path.read_bytes()).decode(
+                        "utf-8"
+                    )
+                    embedding = embed_image_page(
+                        base64_str,
+                        model=model,
+                        api_key=resolved_key,
+                        dimensions=dimensions,
+                        image_format=image_format,
+                        mime_type=task.mime_type,
+                    )
+                    image_cache_path = str(task.source_path)
+                elif task.kind == "text":
+                    embedding = embed_text_document(
+                        task.text_chunk or "",
+                        title=task.source_path.name,
+                        model=model,
+                        api_key=resolved_key,
+                        dimensions=dimensions,
+                    )
+                elif task.kind == "audio":
+                    file_bytes = task.source_path.read_bytes()
+                    if task.byte_range is not None:
+                        start, end = task.byte_range
+                        segment_bytes = file_bytes[start:end]
+                    else:
+                        segment_bytes = file_bytes
+                    if not segment_bytes:
+                        segment_bytes = file_bytes
+                    label = ("beginning", "middle", "end")[
+                        min(task.ordinal, _MEDIA_SEGMENT_COUNT - 1)
+                    ]
+                    embedding = _embed_media_part(
+                        segment_bytes,
+                        mime_type=task.mime_type or "audio/wav",
+                        model=model,
+                        api_key=resolved_key,
+                        dimensions=dimensions,
+                        segment_label=label,
+                    )
+                elif task.kind == "video":
+                    label = ("beginning", "middle", "end")[
+                        min(task.ordinal, _MEDIA_SEGMENT_COUNT - 1)
+                    ]
+                    embedding = _embed_media_part(
+                        task.source_path.read_bytes(),
+                        mime_type=task.mime_type or "video/mp4",
+                        model=model,
+                        api_key=resolved_key,
+                        dimensions=dimensions,
+                        segment_label=label,
+                        video_offsets=task.video_offsets,
+                    )
+                else:
+                    raise ValueError(f"Unsupported task kind: {task.kind}")
+
                 metadata: PageMetadata = {
-                    "doc_path": str(pdf_path),
-                    "page_number": page_idx + 1,
-                    "doc_hash": doc_hash,
+                    "doc_path": str(task.source_path),
+                    "page_number": task.ordinal + 1,
+                    "doc_hash": task.doc_hash,
                     "settings_hash": settings_hash,
-                    "image_cache_path": str(image_path),
+                    "image_cache_path": image_cache_path,
                 }
                 return EmbedResult(
-                    page_id=page_id,
+                    page_id=task.page_id,
                     embedding=embedding,
                     metadata=metadata,
                 )
@@ -338,7 +721,7 @@ def embed_all_pdfs(
                 if attempt < max_retries - 1:
                     continue
         raise RuntimeError(
-            f"Page {page_idx} of '{pdf_path.name}' failed after "
+            f"Task '{task.page_id}' from '{task.source_path.name}' failed after "
             f"{max_retries} attempt(s)"
         ) from last_exc
 
@@ -347,7 +730,7 @@ def embed_all_pdfs(
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {executor.submit(_embed_task, task): task for task in pending}
         with tqdm(
-            total=len(pending), desc="Embedding pages", leave=False
+            total=len(pending), desc="Embedding tasks", leave=False
         ) as pbar:
             for future in as_completed(futures):
                 result = future.result()  # re-raises any RuntimeError from _embed_task

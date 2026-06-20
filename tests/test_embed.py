@@ -677,3 +677,206 @@ class TestEmbedAllPdfs:
 
         assert len(results) == 2
         assert mock_upsert.call_count == 2
+
+    # -- recursive multimodal ingestion --
+
+    @patch("vlmembed.store.get_collection")
+    @patch("vlmembed.store.page_exists")
+    @patch("vlmembed.store.upsert_page")
+    @patch("vlmembed.embed.genai.Client")
+    def test_recursively_processes_nested_pdf(
+        self, mock_client_ctor, mock_upsert, mock_exists, mock_get_coll, tmp_path
+    ):
+        docs_dir = tmp_path / "docs"
+        nested = docs_dir / "a" / "b"
+        nested.mkdir(parents=True)
+        _make_pdf(nested / "nested.pdf", num_pages=1)
+
+        mock_get_coll.return_value = MagicMock()
+        mock_exists.return_value = False
+        mock_client = MagicMock()
+        mock_client_ctor.return_value = mock_client
+        mock_client.models.embed_content.return_value = _mock_embed_response(
+            _fake_embedding(4)
+        )
+
+        with patch("vlmembed.embed.dotenv.load_dotenv"):
+            results = embed_all_pdfs(
+                docs_dir,
+                tmp_path / "embed",
+                api_key="k",
+                dimensions=4,
+                max_workers=1,
+            )
+
+        assert len(results) == 1
+        assert results[0]["metadata"]["doc_path"].endswith("nested.pdf")
+        assert mock_upsert.call_count == 1
+
+    @patch("vlmembed.embed._chunk_text_file", return_value=["chunk 1", "chunk 2"])
+    @patch("vlmembed.store.get_collection")
+    @patch("vlmembed.store.page_exists")
+    @patch("vlmembed.store.upsert_page")
+    @patch("vlmembed.embed.genai.Client")
+    def test_embeds_text_chunks_for_markdown(
+        self,
+        mock_client_ctor,
+        mock_upsert,
+        mock_exists,
+        mock_get_coll,
+        mock_chunk_file,
+        tmp_path,
+    ):
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        (docs_dir / "note.md").write_text("# Title\n\nBody", encoding="utf-8")
+
+        mock_get_coll.return_value = MagicMock()
+        mock_exists.return_value = False
+        mock_client = MagicMock()
+        mock_client_ctor.return_value = mock_client
+        mock_client.models.embed_content.return_value = _mock_embed_response(
+            _fake_embedding(4)
+        )
+
+        with patch("vlmembed.embed.dotenv.load_dotenv"):
+            results = embed_all_pdfs(
+                docs_dir,
+                tmp_path / "embed",
+                api_key="k",
+                dimensions=4,
+                max_workers=1,
+            )
+
+        assert len(results) == 2
+        page_ids = {result["page_id"] for result in results}
+        assert any(page_id.endswith("_txt_0") for page_id in page_ids)
+        assert any(page_id.endswith("_txt_1") for page_id in page_ids)
+        assert mock_chunk_file.call_count == 1
+        assert mock_upsert.call_count == 2
+
+    @patch("vlmembed.store.get_collection")
+    @patch("vlmembed.store.page_exists")
+    @patch("vlmembed.store.upsert_page")
+    @patch("vlmembed.embed.genai.Client")
+    def test_embeds_image_file_and_uses_source_path_as_cache(
+        self, mock_client_ctor, mock_upsert, mock_exists, mock_get_coll, tmp_path
+    ):
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        image_path = docs_dir / "photo.png"
+        image_path.write_bytes(b"not-a-real-image")
+
+        mock_get_coll.return_value = MagicMock()
+        mock_exists.return_value = False
+        mock_client = MagicMock()
+        mock_client_ctor.return_value = mock_client
+        mock_client.models.embed_content.return_value = _mock_embed_response(
+            _fake_embedding(4)
+        )
+
+        with patch("vlmembed.embed.dotenv.load_dotenv"):
+            results = embed_all_pdfs(
+                docs_dir,
+                tmp_path / "embed",
+                api_key="k",
+                dimensions=4,
+                max_workers=1,
+            )
+
+        assert len(results) == 1
+        assert results[0]["page_id"].endswith("_img_0")
+        assert results[0]["metadata"]["image_cache_path"].endswith("photo.png")
+        assert mock_upsert.call_count == 1
+
+    @patch(
+        "vlmembed.embed._build_audio_byte_windows",
+        return_value=[(0, 3), (3, 6), (6, 9)],
+    )
+    @patch("vlmembed.store.get_collection")
+    @patch("vlmembed.store.page_exists")
+    @patch("vlmembed.store.upsert_page")
+    @patch("vlmembed.embed.genai.Client")
+    def test_embeds_three_audio_segments(
+        self,
+        mock_client_ctor,
+        mock_upsert,
+        mock_exists,
+        mock_get_coll,
+        mock_windows,
+        tmp_path,
+    ):
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        (docs_dir / "clip.wav").write_bytes(b"abcdefghi")
+
+        mock_get_coll.return_value = MagicMock()
+        mock_exists.return_value = False
+        mock_client = MagicMock()
+        mock_client_ctor.return_value = mock_client
+        mock_client.models.embed_content.return_value = _mock_embed_response(
+            _fake_embedding(4)
+        )
+
+        with patch("vlmembed.embed.dotenv.load_dotenv"):
+            results = embed_all_pdfs(
+                docs_dir,
+                tmp_path / "embed",
+                api_key="k",
+                dimensions=4,
+                max_workers=1,
+            )
+
+        assert len(results) == 3
+        assert all("_aud_" in result["page_id"] for result in results)
+        labels = [
+            call.kwargs["contents"][0].parts[0].text
+            for call in mock_client.models.embed_content.call_args_list
+        ]
+        assert labels == [
+            "segment: beginning",
+            "segment: middle",
+            "segment: end",
+        ]
+        assert mock_windows.call_count == 1
+        assert mock_upsert.call_count == 3
+
+    @patch("vlmembed.store.get_collection")
+    @patch("vlmembed.store.page_exists")
+    @patch("vlmembed.store.upsert_page")
+    @patch("vlmembed.embed.genai.Client")
+    def test_embeds_three_video_offsets(
+        self, mock_client_ctor, mock_upsert, mock_exists, mock_get_coll, tmp_path
+    ):
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        (docs_dir / "clip.mp4").write_bytes(b"video-bytes")
+
+        mock_get_coll.return_value = MagicMock()
+        mock_exists.return_value = False
+        mock_client = MagicMock()
+        mock_client_ctor.return_value = mock_client
+        mock_client.models.embed_content.return_value = _mock_embed_response(
+            _fake_embedding(4)
+        )
+
+        with patch("vlmembed.embed.dotenv.load_dotenv"):
+            results = embed_all_pdfs(
+                docs_dir,
+                tmp_path / "embed",
+                api_key="k",
+                dimensions=4,
+                max_workers=1,
+            )
+
+        assert len(results) == 3
+        assert all("_vid_" in result["page_id"] for result in results)
+        offsets = [
+            (
+                call.kwargs["contents"][0].parts[1].video_metadata.start_offset,
+                call.kwargs["contents"][0].parts[1].video_metadata.end_offset,
+            )
+            for call in mock_client.models.embed_content.call_args_list
+        ]
+        assert offsets == [("0s", "40s"), ("40s", "80s"), ("80s", "120s")]
+        assert mock_upsert.call_count == 3
