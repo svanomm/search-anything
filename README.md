@@ -68,31 +68,31 @@ Config resolution order is:
 Initialize workspace directories:
 
 ```bash
-uv run vlmembed init
+uv run search init
 ```
 
 Embed recursively from `docs/`:
 
 ```bash
-uv run vlmembed embed
+uv run search embed
 ```
 
 Launch search UI:
 
 ```bash
-uv run vlmembed search
+uv run search search
 ```
 
 Estimate multimodal embedding cost:
 
 ```bash
-uv run vlmembed estimate-cost
+uv run search estimate-cost
 ```
 
 Reset local store artifacts (DB, query cache, metadata, cached images):
 
 ```bash
-uv run vlmembed reset-store
+uv run search reset-store
 ```
 
 Use `-y` with `embed` or `reset-store` to skip confirmation prompts.
@@ -102,17 +102,17 @@ Use `-y` with `embed` or `reset-store` to skip confirmation prompts.
 Interactive mode:
 
 ```bash
-uv run vlmembed
+uv run search
 ```
 
 Subcommands:
 
 ```bash
-uv run vlmembed init [--docs-dir] [--embed-dir]
-uv run vlmembed embed [--docs-dir] [--embed-dir] [--api-key] [--model] [--dpi] [--format] [--dimensions] [--max-workers] [--max-retries] [-y]
-uv run vlmembed search [--embed-dir] [--api-key] [--model] [--dimensions] [--port]
-uv run vlmembed estimate-cost [--docs-dir] [--dpi]
-uv run vlmembed reset-store [--embed-dir] [-y]
+uv run search init [--docs-dir] [--embed-dir]
+uv run search embed [--docs-dir] [--embed-dir] [--api-key] [--model] [--dpi] [--format] [--dimensions] [--max-workers] [--max-retries] [-y]
+uv run search search [--embed-dir] [--api-key] [--model] [--dimensions] [--port]
+uv run search estimate-cost [--docs-dir] [--dpi]
+uv run search reset-store [--embed-dir] [-y]
 ```
 
 ## Search UI Notes
