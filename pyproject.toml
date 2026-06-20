@@ -3,7 +3,7 @@ requires = ["hatchling>=1.27.0"]
 build-backend = "hatchling.build"
 
 [project]
-name = "vlm-embed"
+name = "search-anything"
 version = "0.1.0"
 description = "Multimodal PDF embedding and semantic search via OpenRouter and ChromaDB"
 readme = "README.md"
@@ -19,7 +19,7 @@ dependencies = [
 ]
 
 [project.scripts]
-vlmembed = "vlmembed.cli:main"
+search = "vlmembed.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/vlmembed"]

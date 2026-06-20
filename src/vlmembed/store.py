@@ -1,4 +1,4 @@
-"""ChromaDB vector store for vlmembed."""
+"""ChromaDB vector store for search-anything."""
 
 from __future__ import annotations
 
@@ -148,7 +148,7 @@ def ensure_store_compatibility(
         details = "; ".join(mismatches)
         raise RuntimeError(
             "Store metadata mismatch detected. "
-            f"{details}. Delete '{embed_dir}' and re-run 'vlmembed embed' to rebuild."
+            f"{details}. Delete '{embed_dir}' and re-run 'search embed' to rebuild."
         )
 
     if existing["model"] != model:

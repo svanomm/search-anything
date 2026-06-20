@@ -1,4 +1,4 @@
-"""Shared embedding output contract and path helpers for vlmembed."""
+"""Shared embedding output contract and path helpers for search-anything."""
 
 from __future__ import annotations
 
@@ -23,12 +23,12 @@ DB_SUBDIR = Path("db")
 
 ENV_API_KEY = "GOOGLE_API_KEY"
 ENV_USE_ENTERPRISE = "GOOGLE_GENAI_USE_ENTERPRISE"
-ENV_MODEL = "VLMEMBED_MODEL"
-ENV_DPI = "VLMEMBED_DPI"
-ENV_IMAGE_FORMAT = "VLMEMBED_IMAGE_FORMAT"
-ENV_DIMENSIONS = "VLMEMBED_DIMENSIONS"
-ENV_MAX_WORKERS = "VLMEMBED_MAX_WORKERS"
-ENV_MAX_RETRIES = "VLMEMBED_MAX_RETRIES"
+ENV_MODEL = "SEARCH_MODEL"
+ENV_DPI = "SEARCH_DPI"
+ENV_IMAGE_FORMAT = "SEARCH_IMAGE_FORMAT"
+ENV_DIMENSIONS = "SEARCH_DIMENSIONS"
+ENV_MAX_WORKERS = "SEARCH_MAX_WORKERS"
+ENV_MAX_RETRIES = "SEARCH_MAX_RETRIES"
 
 # Hard-coded defaults
 DEFAULT_MODEL = "gemini-embedding-2"
@@ -67,7 +67,7 @@ def get_project_directories(
     docs_dir: Path = DEFAULT_DOCS_DIR,
     embed_dir: Path = DEFAULT_EMBED_DIR,
 ) -> dict[str, Path]:
-    """Return the directories that make up the standard vlmembed workspace."""
+    """Return the directories that make up the standard search-anything workspace."""
     return {
         "docs": docs_dir,
         "embeddings root": embed_dir,

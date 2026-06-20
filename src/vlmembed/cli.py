@@ -1,4 +1,4 @@
-"""Command-line interface for vlmembed."""
+"""Command-line interface for search-anything."""
 
 from __future__ import annotations
 
@@ -46,7 +46,7 @@ _RED = "\033[31m"
 _BANNER = (
     f"\n{_BOLD}{_CYAN}"
     "╔══════════════════════════════════════╗\n"
-    "║         vlmembed  v0.1.0             ║\n"
+    "║      search-anything  v0.1.0         ║\n"
     "║  Multimodal PDF embedding & search   ║\n"
     "╚══════════════════════════════════════╝"
     f"{_R}\n"
@@ -156,7 +156,7 @@ def _estimate_pending_embedding_cost(
 
 
 def cmd_init(args: argparse.Namespace) -> int:
-    """Create the standard vlmembed workspace directory structure."""
+    """Create the standard search-anything workspace directory structure."""
     docs_dir = Path(args.docs_dir)
     embed_dir = Path(args.embed_dir)
 
@@ -173,7 +173,7 @@ def cmd_init(args: argparse.Namespace) -> int:
 
     print(
         f"\n{_GREEN}Done.{_R} Drop supported files into {_BOLD}{docs_dir}{_R} "
-        f"then run {_BOLD}vlmembed embed{_R}.\n"
+        f"then run {_BOLD}search embed{_R}.\n"
     )
     return 0
 
@@ -429,7 +429,7 @@ def _interactive_menu() -> int:
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="vlmembed",
+        prog="search",
         description="Multimodal embedding and semantic search via Google Gemini API and ChromaDB.",
     )
     sub = parser.add_subparsers(dest="subcommand")
