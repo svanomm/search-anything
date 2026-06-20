@@ -15,6 +15,7 @@ from vlmembed.cli import (
     cmd_embed,
     cmd_estimate_cost,
     cmd_init,
+    cmd_reset_store,
     cmd_search,
     main,
 )
@@ -186,6 +187,16 @@ class TestBuildParser:
         args = self.parser.parse_args(["estimate-cost", "--dpi", "100"])
         assert isinstance(args.dpi, int)
         assert args.dpi == 100
+
+    # reset-store
+    def test_reset_store_defaults(self):
+        args = self.parser.parse_args(["reset-store"])
+        assert args.embed_dir == str(DEFAULT_EMBED_DIR)
+        assert args.yes is False
+
+    def test_reset_store_yes_flag(self):
+        args = self.parser.parse_args(["reset-store", "--yes"])
+        assert args.yes is True
 
 
 # ---------------------------------------------------------------------------
@@ -446,7 +457,7 @@ class TestCmdEmbed:
         }
         rc, mock_fn = self._run(args, estimate_return=estimate_return)
         assert rc == 0
-        mock_fn.assert_not_called()
+        mock_fn.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -612,6 +623,37 @@ class TestCmdEstimateCost:
 
 
 # ---------------------------------------------------------------------------
+# cmd_reset_store
+# ---------------------------------------------------------------------------
+
+
+class TestCmdResetStore:
+    def _ns(self, **kwargs):
+        defaults = {"embed_dir": str(DEFAULT_EMBED_DIR), "yes": False}
+        defaults.update(kwargs)
+        return argparse.Namespace(**defaults)
+
+    def test_cancelled_when_user_declines(self):
+        args = self._ns(yes=False)
+        with patch("builtins.input", return_value="n"):
+            rc = cmd_reset_store(args)
+        assert rc == 0
+
+    def test_yes_skips_prompt_and_calls_reset(self, tmp_path):
+        args = self._ns(embed_dir=str(tmp_path), yes=True)
+        with patch("vlmembed.store.reset_store", return_value=[]) as mock_reset:
+            rc = cmd_reset_store(args)
+        assert rc == 0
+        mock_reset.assert_called_once_with(tmp_path, remove_images=True)
+
+    def test_returns_zero_when_nothing_removed(self, tmp_path):
+        args = self._ns(embed_dir=str(tmp_path), yes=True)
+        with patch("vlmembed.store.reset_store", return_value=[]):
+            rc = cmd_reset_store(args)
+        assert rc == 0
+
+
+# ---------------------------------------------------------------------------
 # main() — subcommand routing
 # ---------------------------------------------------------------------------
 
@@ -644,6 +686,12 @@ class TestMain:
     def test_estimate_cost_routed_correctly(self):
         with patch("vlmembed.cli.cmd_estimate_cost", return_value=0) as mock_cmd:
             rc = main(["estimate-cost"])
+        mock_cmd.assert_called_once()
+        assert rc == 0
+
+    def test_reset_store_routed_correctly(self):
+        with patch("vlmembed.cli.cmd_reset_store", return_value=0) as mock_cmd:
+            rc = main(["reset-store"])
         mock_cmd.assert_called_once()
         assert rc == 0
 

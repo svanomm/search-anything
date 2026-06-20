@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 import string
 from pathlib import Path
 
@@ -14,6 +15,7 @@ from vlmembed.contract import (
     STORE_SCHEMA_VERSION,
     StoreMetadata,
     get_db_dir,
+    get_images_dir,
 )
 
 _QUERY_CACHE_FILE = "query_cache.json"
@@ -341,3 +343,25 @@ def search(
             result["distances"][0],
         )
     ]
+
+
+def reset_store(embed_dir: Path, *, remove_images: bool = True) -> list[Path]:
+    """Remove persistent store artifacts and return the removed paths."""
+    targets: list[Path] = [
+        get_db_dir(embed_dir),
+        embed_dir / _QUERY_CACHE_FILE,
+        _store_meta_path(embed_dir),
+    ]
+    if remove_images:
+        targets.append(get_images_dir(embed_dir))
+
+    removed: list[Path] = []
+    for target in targets:
+        if target.is_dir():
+            shutil.rmtree(target)
+            removed.append(target)
+        elif target.is_file():
+            target.unlink()
+            removed.append(target)
+
+    return removed

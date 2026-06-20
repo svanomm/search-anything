@@ -54,7 +54,7 @@ _BANNER = (
 
 _MENU_OPTIONS = [
     ("1", "Init          — create docs/ and embeddings/ structure"),
-    ("2", "Embed         — process PDFs and populate the vector store"),
+    ("2", "Embed         — recursively process supported files"),
     ("3", "Search        — launch the Gradio semantic search UI"),
     ("4", "Estimate cost — estimate embedding cost for docs/"),
     ("5", "Quit"),
@@ -116,7 +116,7 @@ def _estimate_pending_embedding_cost(
     embed_dir: Path,
     dpi: int,
 ) -> dict:
-    """Estimate cost only for pages that are not yet embedded."""
+    """Estimate cost for pending PDF pages discovered recursively."""
     import fitz  # noqa: PLC0415
 
     from vlmembed.embed import compute_doc_hash  # noqa: PLC0415
@@ -126,7 +126,7 @@ def _estimate_pending_embedding_cost(
     if not docs_dir.exists():
         raise FileNotFoundError(f"Docs directory not found: {docs_dir}")
 
-    pdf_files = sorted(docs_dir.glob("*.pdf"))
+    pdf_files = sorted(docs_dir.rglob("*.pdf"))
     if not pdf_files:
         return estimate_cost_from_page_counts({}, dpi=dpi)
 
@@ -172,7 +172,7 @@ def cmd_init(args: argparse.Namespace) -> int:
         _print_path_status(s.label, s.path, s.exists)
 
     print(
-        f"\n{_GREEN}Done.{_R} Drop PDFs into {_BOLD}{docs_dir}{_R} "
+        f"\n{_GREEN}Done.{_R} Drop supported files into {_BOLD}{docs_dir}{_R} "
         f"then run {_BOLD}vlmembed embed{_R}.\n"
     )
     return 0
@@ -184,7 +184,7 @@ def cmd_init(args: argparse.Namespace) -> int:
 
 
 def cmd_embed(args: argparse.Namespace) -> int:
-    """Embed all unprocessed PDF pages into the ChromaDB vector store."""
+    """Embed all unprocessed supported files into the ChromaDB vector store."""
     from vlmembed.embed import embed_all_pdfs  # noqa: PLC0415
 
     dotenv.load_dotenv()
@@ -201,37 +201,39 @@ def cmd_embed(args: argparse.Namespace) -> int:
     docs_dir = Path(args.docs_dir)
     embed_dir = Path(args.embed_dir)
 
-    print(f"\n{_BOLD}Estimating embedding cost for pending pages…{_R}\n")
+    print(f"\n{_BOLD}Estimating embedding cost for pending PDF pages…{_R}\n")
     estimate = _estimate_pending_embedding_cost(
         docs_dir=docs_dir,
         embed_dir=embed_dir,
         dpi=dpi,
     )
 
-    if not estimate["per_file"]:
-        print(f"  {_YELLOW}No new pages need embedding in {docs_dir}{_R}\n")
-        return 0
+    if estimate["per_file"]:
+        for filename, pages in estimate["per_file"].items():
+            print(f"  {_DIM}{filename}:{_R} {pages} pending page(s)")
 
-    for filename, pages in estimate["per_file"].items():
-        print(f"  {_DIM}{filename}:{_R} {pages} pending page(s)")
-
-    print(f"\n  Pending pages:   {_BOLD}{estimate['pages']}{_R}")
-    print(f"  Tokens/page:     {_BOLD}{estimate['tokens_per_page']:,}{_R}")
-    print(f"  Total tokens:    {_BOLD}{estimate['total_tokens']:,}{_R}")
-    print(f"  Estimated cost:  {_BOLD}{_GREEN}${estimate['estimated_usd']:.4f}{_R}")
-    print(
-        f"\n  {_DIM}Disclaimer: estimate based on ~${0.2}/M tokens at {dpi} DPI "
-        f"(US Letter page size). Actual cost may vary.{_R}\n"
-    )
+        print(f"\n  Pending pages:   {_BOLD}{estimate['pages']}{_R}")
+        print(f"  Tokens/page:     {_BOLD}{estimate['tokens_per_page']:,}{_R}")
+        print(f"  Total tokens:    {_BOLD}{estimate['total_tokens']:,}{_R}")
+        print(f"  Estimated cost:  {_BOLD}{_GREEN}${estimate['estimated_usd']:.4f}{_R}")
+        print(
+            f"\n  {_DIM}Disclaimer: estimate based on ~${0.2}/M tokens at {dpi} DPI "
+            f"(US Letter page size). Actual cost may vary.{_R}\n"
+        )
+    else:
+        print(
+            f"  {_YELLOW}No pending PDF pages found for cost estimation.{_R}\n"
+            f"  {_DIM}Non-PDF files may still produce new embeddings.{_R}\n"
+        )
 
     if not getattr(args, "yes", False) and not _prompt_yes_no(
-        "Proceed with embedding using the estimated cost above?",
+        "Proceed with embedding supported files?",
         default=False,
     ):
         print(f"\n{_YELLOW}Embedding cancelled.{_R}\n")
         return 0
 
-    print(f"\n{_BOLD}Embedding PDFs…{_R}\n")
+    print(f"\n{_BOLD}Embedding files…{_R}\n")
     results = embed_all_pdfs(
         docs_dir,
         embed_dir,
@@ -244,7 +246,7 @@ def cmd_embed(args: argparse.Namespace) -> int:
         max_retries=max_retries,
     )
     n = len(results)
-    print(f"\n{_GREEN}Done.{_R} {_BOLD}{n}{_R} page(s) newly embedded.\n")
+    print(f"\n{_GREEN}Done.{_R} {_BOLD}{n}{_R} item(s) newly embedded.\n")
     return 0
 
 
@@ -310,6 +312,36 @@ def cmd_estimate_cost(args: argparse.Namespace) -> int:
         f"\n  {_DIM}Disclaimer: estimate based on ~$0.45/M tokens at {dpi} DPI "
         f"(US Letter page size). Actual cost may vary.{_R}\n"
     )
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# Subcommand: reset-store
+# ---------------------------------------------------------------------------
+
+
+def cmd_reset_store(args: argparse.Namespace) -> int:
+    """Remove persisted store artifacts so embeddings can be rebuilt cleanly."""
+    from vlmembed.store import reset_store  # noqa: PLC0415
+
+    embed_dir = Path(args.embed_dir)
+
+    if not getattr(args, "yes", False) and not _prompt_yes_no(
+        f"Reset store under {embed_dir}? This will remove DB/cache/image artifacts.",
+        default=False,
+    ):
+        print(f"\n{_YELLOW}Reset cancelled.{_R}\n")
+        return 0
+
+    removed = reset_store(embed_dir, remove_images=True)
+    if not removed:
+        print(f"\n{_YELLOW}No store artifacts found under {embed_dir}.{_R}\n")
+        return 0
+
+    print(f"\n{_GREEN}Removed store artifacts:{_R}")
+    for path in removed:
+        print(f"  {_DIM}- {_R}{path}")
+    print()
     return 0
 
 
@@ -400,7 +432,10 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     # --- embed ---
-    p_embed = sub.add_parser("embed", help="Embed all PDFs into the vector store.")
+    p_embed = sub.add_parser(
+        "embed",
+        help="Recursively embed supported files into the vector store.",
+    )
     p_embed.add_argument("--docs-dir", default=str(DEFAULT_DOCS_DIR))
     p_embed.add_argument("--embed-dir", default=str(DEFAULT_EMBED_DIR))
     p_embed.add_argument("--api-key", default=None, help="Google API key.")
@@ -437,7 +472,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--max-retries",
         type=int,
         default=None,
-        help=f"Retries per page (default: {DEFAULT_MAX_RETRIES}).",
+        help=f"Retries per embedding task (default: {DEFAULT_MAX_RETRIES}).",
     )
     p_embed.add_argument(
         "-y",
@@ -478,6 +513,19 @@ def _build_parser() -> argparse.ArgumentParser:
         help=f"Render DPI used for token estimation (default: {DEFAULT_DPI}).",
     )
 
+    # --- reset-store ---
+    p_reset = sub.add_parser(
+        "reset-store",
+        help="Delete persisted embedding store artifacts for a clean rebuild.",
+    )
+    p_reset.add_argument("--embed-dir", default=str(DEFAULT_EMBED_DIR))
+    p_reset.add_argument(
+        "-y",
+        "--yes",
+        action="store_true",
+        help="Skip confirmation prompt and reset immediately.",
+    )
+
     return parser
 
 
@@ -501,6 +549,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_search(args)
     if args.subcommand == "estimate-cost":
         return cmd_estimate_cost(args)
+    if args.subcommand == "reset-store":
+        return cmd_reset_store(args)
 
     parser.print_help()
     return 1

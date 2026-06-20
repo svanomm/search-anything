@@ -17,6 +17,7 @@ from vlmembed.store import (
     load_query_cache,
     normalize_query,
     page_exists,
+    reset_store,
     save_query_cache,
     search,
     set_cached_embedding,
@@ -117,6 +118,43 @@ class TestStoreMetadataCompatibility:
                 model="gemini-embedding-2",
                 dimensions=3072,
             )
+
+
+class TestResetStore:
+    def test_removes_all_store_artifacts(self, tmp_path):
+        (tmp_path / "db").mkdir(parents=True)
+        (tmp_path / "db" / "chroma.sqlite3").write_text("db", encoding="utf-8")
+        (tmp_path / "query_cache.json").write_text("{}", encoding="utf-8")
+        (tmp_path / "store_meta.json").write_text(
+            '{"provider":"google-genai","schema_version":"2","model":"m","dimensions":1}',
+            encoding="utf-8",
+        )
+        (tmp_path / "images" / "x").mkdir(parents=True)
+        (tmp_path / "images" / "x" / "page_1.png").write_bytes(b"img")
+
+        removed = reset_store(tmp_path, remove_images=True)
+
+        assert (tmp_path / "db").exists() is False
+        assert (tmp_path / "query_cache.json").exists() is False
+        assert (tmp_path / "store_meta.json").exists() is False
+        assert (tmp_path / "images").exists() is False
+        assert len(removed) == 4
+
+    def test_keeps_images_when_requested(self, tmp_path):
+        (tmp_path / "db").mkdir(parents=True)
+        (tmp_path / "query_cache.json").write_text("{}", encoding="utf-8")
+        (tmp_path / "store_meta.json").write_text(
+            '{"provider":"google-genai","schema_version":"2","model":"m","dimensions":1}',
+            encoding="utf-8",
+        )
+        (tmp_path / "images" / "x").mkdir(parents=True)
+
+        reset_store(tmp_path, remove_images=False)
+
+        assert (tmp_path / "db").exists() is False
+        assert (tmp_path / "query_cache.json").exists() is False
+        assert (tmp_path / "store_meta.json").exists() is False
+        assert (tmp_path / "images").exists() is True
 
     def test_updates_model_without_failing(self, tmp_path):
         (tmp_path / "store_meta.json").write_text(
