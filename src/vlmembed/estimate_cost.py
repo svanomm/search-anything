@@ -12,7 +12,7 @@ from vlmembed.contract import DEFAULT_DOCS_DIR, DEFAULT_DPI
 # Pricing constants
 # ---------------------------------------------------------------------------
 
-# Approximate cost per million image tokens (OpenRouter / Gemini Embedding 2).
+# Approximate cost per million image tokens (Gemini Embedding 2).
 # This is an estimate; actual pricing may differ.
 _PRICE_PER_M_TOKENS: float = 0.2
 

@@ -6,13 +6,11 @@ import base64
 import hashlib
 import json
 import os
-import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import fitz
 import pytest
-import requests
 
 from vlmembed.embed import (
     compute_doc_hash,
@@ -45,10 +43,11 @@ def _fake_embedding(dimensions: int = 3) -> list[float]:
 
 
 def _mock_embed_response(embedding: list[float]) -> MagicMock:
-    """Build a mock requests.Response that looks like the OpenRouter API."""
+    """Build a mock google-genai embed_content response."""
     mock_resp = MagicMock()
-    mock_resp.json.return_value = {"data": [{"embedding": embedding}]}
-    mock_resp.raise_for_status.return_value = None
+    emb = MagicMock()
+    emb.values = embedding
+    mock_resp.embeddings = [emb]
     return mock_resp
 
 
@@ -214,73 +213,74 @@ class TestEmbedImagePage:
     _FAKE_B64 = base64.b64encode(b"fake-image-data").decode()
     _EMBEDDING = [0.1, 0.2, 0.3]
 
-    @patch("vlmembed.embed.requests.post")
-    def test_returns_embedding_list(self, mock_post):
-        mock_post.return_value = _mock_embed_response(self._EMBEDDING)
+    @patch("vlmembed.embed.genai.Client")
+    def test_returns_embedding_list(self, mock_client_ctor):
+        mock_client = MagicMock()
+        mock_client_ctor.return_value = mock_client
+        mock_client.models.embed_content.return_value = _mock_embed_response(
+            self._EMBEDDING
+        )
         result = embed_image_page(
             self._FAKE_B64, model="m", api_key="key", dimensions=3
         )
         assert result == self._EMBEDDING
 
-    @patch("vlmembed.embed.requests.post")
-    def test_posts_to_openrouter_url(self, mock_post):
-        from vlmembed.contract import OPENROUTER_EMBEDDINGS_URL
-        mock_post.return_value = _mock_embed_response(self._EMBEDDING)
+    @patch("vlmembed.embed.genai.Client")
+    def test_client_initialized_with_api_key(self, mock_client_ctor):
+        mock_client = MagicMock()
+        mock_client_ctor.return_value = mock_client
+        mock_client.models.embed_content.return_value = _mock_embed_response(
+            self._EMBEDDING
+        )
         embed_image_page(self._FAKE_B64, model="m", api_key="key", dimensions=3)
-        assert mock_post.call_args[0][0] == OPENROUTER_EMBEDDINGS_URL
+        mock_client_ctor.assert_called_once_with(api_key="key")
 
-    @patch("vlmembed.embed.requests.post")
-    def test_auth_header_uses_bearer_token(self, mock_post):
-        mock_post.return_value = _mock_embed_response(self._EMBEDDING)
-        embed_image_page(self._FAKE_B64, model="m", api_key="my-secret", dimensions=3)
-        headers = mock_post.call_args[1]["headers"]
-        assert headers["Authorization"] == "Bearer my-secret"
-
-    @patch("vlmembed.embed.requests.post")
-    def test_payload_contains_image_url_input(self, mock_post):
-        mock_post.return_value = _mock_embed_response(self._EMBEDDING)
+    @patch("vlmembed.embed.genai.Client")
+    def test_calls_embed_content_with_model(self, mock_client_ctor):
+        mock_client = MagicMock()
+        mock_client_ctor.return_value = mock_client
+        mock_client.models.embed_content.return_value = _mock_embed_response(
+            self._EMBEDDING
+        )
         embed_image_page(self._FAKE_B64, model="mymodel", api_key="key", dimensions=16)
-        payload = mock_post.call_args[1]["json"]
-        assert payload["model"] == "mymodel"
-        assert payload["dimensions"] == 16
-        input_item = payload["input"][0]
-        content = input_item["content"][0]
-        assert content["type"] == "image_url"
-        assert self._FAKE_B64 in content["image_url"]["url"]
+        kwargs = mock_client.models.embed_content.call_args.kwargs
+        assert kwargs["model"] == "mymodel"
+        assert "contents" in kwargs
+        assert "config" in kwargs
 
-    @patch("vlmembed.embed.requests.post")
-    def test_png_mime_type(self, mock_post):
-        mock_post.return_value = _mock_embed_response(self._EMBEDDING)
+    @patch("vlmembed.embed.genai.Client")
+    def test_png_mime_type(self, mock_client_ctor):
+        mock_client = MagicMock()
+        mock_client_ctor.return_value = mock_client
+        mock_client.models.embed_content.return_value = _mock_embed_response(
+            self._EMBEDDING
+        )
         embed_image_page(
             self._FAKE_B64, model="m", api_key="k", dimensions=3, image_format="png"
         )
-        payload = mock_post.call_args[1]["json"]
-        url = payload["input"][0]["content"][0]["image_url"]["url"]
-        assert url.startswith("data:image/png;base64,")
+        content = mock_client.models.embed_content.call_args.kwargs["contents"][0]
+        assert content.parts[0].inline_data.mime_type == "image/png"
 
-    @patch("vlmembed.embed.requests.post")
-    def test_jpeg_mime_type(self, mock_post):
-        mock_post.return_value = _mock_embed_response(self._EMBEDDING)
+    @patch("vlmembed.embed.genai.Client")
+    def test_jpeg_mime_type(self, mock_client_ctor):
+        mock_client = MagicMock()
+        mock_client_ctor.return_value = mock_client
+        mock_client.models.embed_content.return_value = _mock_embed_response(
+            self._EMBEDDING
+        )
         embed_image_page(
             self._FAKE_B64, model="m", api_key="k", dimensions=3, image_format="jpeg"
         )
-        payload = mock_post.call_args[1]["json"]
-        url = payload["input"][0]["content"][0]["image_url"]["url"]
-        assert url.startswith("data:image/jpeg;base64,")
+        content = mock_client.models.embed_content.call_args.kwargs["contents"][0]
+        assert content.parts[0].inline_data.mime_type == "image/jpeg"
 
-    @patch("vlmembed.embed.requests.post")
-    def test_http_error_is_propagated(self, mock_post):
-        mock_resp = MagicMock()
-        mock_resp.raise_for_status.side_effect = requests.HTTPError("500")
-        mock_post.return_value = mock_resp
-        with pytest.raises(requests.HTTPError):
+    @patch("vlmembed.embed.genai.Client")
+    def test_api_error_is_propagated(self, mock_client_ctor):
+        mock_client = MagicMock()
+        mock_client_ctor.return_value = mock_client
+        mock_client.models.embed_content.side_effect = RuntimeError("500")
+        with pytest.raises(RuntimeError):
             embed_image_page(self._FAKE_B64, model="m", api_key="k", dimensions=3)
-
-    @patch("vlmembed.embed.requests.post")
-    def test_timeout_is_set(self, mock_post):
-        mock_post.return_value = _mock_embed_response(self._EMBEDDING)
-        embed_image_page(self._FAKE_B64, model="m", api_key="k", dimensions=3)
-        assert mock_post.call_args[1]["timeout"] == 60
 
 
 # ---------------------------------------------------------------------------
@@ -291,48 +291,56 @@ class TestEmbedImagePage:
 class TestEmbedTextQuery:
     _EMBEDDING = [0.5, 0.6, 0.7]
 
-    @patch("vlmembed.embed.requests.post")
-    def test_returns_embedding_list(self, mock_post):
-        mock_post.return_value = _mock_embed_response(self._EMBEDDING)
+    @patch("vlmembed.embed.genai.Client")
+    def test_returns_embedding_list(self, mock_client_ctor):
+        mock_client = MagicMock()
+        mock_client_ctor.return_value = mock_client
+        mock_client.models.embed_content.return_value = _mock_embed_response(
+            self._EMBEDDING
+        )
         result = embed_text_query("hello world", model="m", api_key="k", dimensions=3)
         assert result == self._EMBEDDING
 
-    @patch("vlmembed.embed.requests.post")
-    def test_input_is_plain_string(self, mock_post):
-        mock_post.return_value = _mock_embed_response(self._EMBEDDING)
+    @patch("vlmembed.embed.genai.Client")
+    def test_input_uses_retrieval_instruction(self, mock_client_ctor):
+        mock_client = MagicMock()
+        mock_client_ctor.return_value = mock_client
+        mock_client.models.embed_content.return_value = _mock_embed_response(
+            self._EMBEDDING
+        )
         embed_text_query("search query", model="mymodel", api_key="k", dimensions=8)
-        payload = mock_post.call_args[1]["json"]
-        assert payload["input"] == "search query"
-        assert payload["model"] == "mymodel"
-        assert payload["dimensions"] == 8
+        kwargs = mock_client.models.embed_content.call_args.kwargs
+        assert kwargs["contents"] == ["task: search result | query: search query"]
+        assert kwargs["model"] == "mymodel"
 
-    @patch("vlmembed.embed.requests.post")
-    def test_auth_header_uses_bearer_token(self, mock_post):
-        mock_post.return_value = _mock_embed_response(self._EMBEDDING)
+    @patch("vlmembed.embed.genai.Client")
+    def test_client_initialized_with_api_key(self, mock_client_ctor):
+        mock_client = MagicMock()
+        mock_client_ctor.return_value = mock_client
+        mock_client.models.embed_content.return_value = _mock_embed_response(
+            self._EMBEDDING
+        )
         embed_text_query("q", model="m", api_key="tok", dimensions=3)
-        headers = mock_post.call_args[1]["headers"]
-        assert headers["Authorization"] == "Bearer tok"
+        mock_client_ctor.assert_called_once_with(api_key="tok")
 
-    @patch("vlmembed.embed.requests.post")
-    def test_posts_to_openrouter_url(self, mock_post):
-        from vlmembed.contract import OPENROUTER_EMBEDDINGS_URL
-        mock_post.return_value = _mock_embed_response(self._EMBEDDING)
+    @patch("vlmembed.embed.genai.Client")
+    def test_calls_embed_content_with_model(self, mock_client_ctor):
+        mock_client = MagicMock()
+        mock_client_ctor.return_value = mock_client
+        mock_client.models.embed_content.return_value = _mock_embed_response(
+            self._EMBEDDING
+        )
         embed_text_query("q", model="m", api_key="k", dimensions=3)
-        assert mock_post.call_args[0][0] == OPENROUTER_EMBEDDINGS_URL
+        kwargs = mock_client.models.embed_content.call_args.kwargs
+        assert kwargs["model"] == "m"
 
-    @patch("vlmembed.embed.requests.post")
-    def test_http_error_propagated(self, mock_post):
-        mock_resp = MagicMock()
-        mock_resp.raise_for_status.side_effect = requests.HTTPError("401")
-        mock_post.return_value = mock_resp
-        with pytest.raises(requests.HTTPError):
+    @patch("vlmembed.embed.genai.Client")
+    def test_api_error_propagated(self, mock_client_ctor):
+        mock_client = MagicMock()
+        mock_client_ctor.return_value = mock_client
+        mock_client.models.embed_content.side_effect = RuntimeError("401")
+        with pytest.raises(RuntimeError):
             embed_text_query("q", model="m", api_key="k", dimensions=3)
-
-    @patch("vlmembed.embed.requests.post")
-    def test_timeout_is_set(self, mock_post):
-        mock_post.return_value = _mock_embed_response(self._EMBEDDING)
-        embed_text_query("q", model="m", api_key="k", dimensions=3)
-        assert mock_post.call_args[1]["timeout"] == 60
 
 
 # ---------------------------------------------------------------------------
@@ -408,9 +416,9 @@ class TestEmbedAllPdfs:
     @patch("vlmembed.store.get_collection")
     @patch("vlmembed.store.page_exists")
     @patch("vlmembed.store.upsert_page")
-    @patch("vlmembed.embed.requests.post")
+    @patch("vlmembed.embed.genai.Client")
     def test_embeds_new_pages(
-        self, mock_post, mock_upsert, mock_exists, mock_get_coll, tmp_path
+        self, mock_client_ctor, mock_upsert, mock_exists, mock_get_coll, tmp_path
     ):
         docs_dir = tmp_path / "docs"
         docs_dir.mkdir()
@@ -419,7 +427,9 @@ class TestEmbedAllPdfs:
         mock_get_coll.return_value = MagicMock()
         mock_exists.return_value = False  # Nothing in store yet
         fake_emb = _fake_embedding(4)
-        mock_post.return_value = _mock_embed_response(fake_emb)
+        mock_client = MagicMock()
+        mock_client_ctor.return_value = mock_client
+        mock_client.models.embed_content.return_value = _mock_embed_response(fake_emb)
 
         with patch("vlmembed.embed.dotenv.load_dotenv"):
             results = embed_all_pdfs(
@@ -443,9 +453,9 @@ class TestEmbedAllPdfs:
     @patch("vlmembed.store.get_collection")
     @patch("vlmembed.store.page_exists")
     @patch("vlmembed.store.upsert_page")
-    @patch("vlmembed.embed.requests.post")
+    @patch("vlmembed.embed.genai.Client")
     def test_page_ids_contain_doc_hash_and_index(
-        self, mock_post, mock_upsert, mock_exists, mock_get_coll, tmp_path
+        self, mock_client_ctor, mock_upsert, mock_exists, mock_get_coll, tmp_path
     ):
         docs_dir = tmp_path / "docs"
         docs_dir.mkdir()
@@ -453,7 +463,11 @@ class TestEmbedAllPdfs:
 
         mock_get_coll.return_value = MagicMock()
         mock_exists.return_value = False
-        mock_post.return_value = _mock_embed_response(_fake_embedding(4))
+        mock_client = MagicMock()
+        mock_client_ctor.return_value = mock_client
+        mock_client.models.embed_content.return_value = _mock_embed_response(
+            _fake_embedding(4)
+        )
 
         with patch("vlmembed.embed.dotenv.load_dotenv"):
             results = embed_all_pdfs(
@@ -470,9 +484,9 @@ class TestEmbedAllPdfs:
     @patch("vlmembed.store.get_collection")
     @patch("vlmembed.store.page_exists")
     @patch("vlmembed.store.upsert_page")
-    @patch("vlmembed.embed.requests.post")
+    @patch("vlmembed.embed.genai.Client")
     def test_image_files_are_cached_to_disk(
-        self, mock_post, mock_upsert, mock_exists, mock_get_coll, tmp_path
+        self, mock_client_ctor, mock_upsert, mock_exists, mock_get_coll, tmp_path
     ):
         docs_dir = tmp_path / "docs"
         docs_dir.mkdir()
@@ -481,7 +495,11 @@ class TestEmbedAllPdfs:
 
         mock_get_coll.return_value = MagicMock()
         mock_exists.return_value = False
-        mock_post.return_value = _mock_embed_response(_fake_embedding(4))
+        mock_client = MagicMock()
+        mock_client_ctor.return_value = mock_client
+        mock_client.models.embed_content.return_value = _mock_embed_response(
+            _fake_embedding(4)
+        )
 
         with patch("vlmembed.embed.dotenv.load_dotenv"):
             results = embed_all_pdfs(
@@ -495,9 +513,9 @@ class TestEmbedAllPdfs:
     @patch("vlmembed.store.get_collection")
     @patch("vlmembed.store.page_exists")
     @patch("vlmembed.store.upsert_page")
-    @patch("vlmembed.embed.requests.post")
+    @patch("vlmembed.embed.genai.Client")
     def test_settings_hash_in_metadata(
-        self, mock_post, mock_upsert, mock_exists, mock_get_coll, tmp_path
+        self, mock_client_ctor, mock_upsert, mock_exists, mock_get_coll, tmp_path
     ):
         docs_dir = tmp_path / "docs"
         docs_dir.mkdir()
@@ -505,7 +523,11 @@ class TestEmbedAllPdfs:
 
         mock_get_coll.return_value = MagicMock()
         mock_exists.return_value = False
-        mock_post.return_value = _mock_embed_response(_fake_embedding(4))
+        mock_client = MagicMock()
+        mock_client_ctor.return_value = mock_client
+        mock_client.models.embed_content.return_value = _mock_embed_response(
+            _fake_embedding(4)
+        )
 
         with patch("vlmembed.embed.dotenv.load_dotenv"):
             results = embed_all_pdfs(
@@ -529,9 +551,9 @@ class TestEmbedAllPdfs:
     @patch("vlmembed.store.get_collection")
     @patch("vlmembed.store.page_exists")
     @patch("vlmembed.store.upsert_page")
-    @patch("vlmembed.embed.requests.post")
+    @patch("vlmembed.embed.genai.Client")
     def test_retries_on_transient_error(
-        self, mock_post, mock_upsert, mock_exists, mock_get_coll, tmp_path
+        self, mock_client_ctor, mock_upsert, mock_exists, mock_get_coll, tmp_path
     ):
         docs_dir = tmp_path / "docs"
         docs_dir.mkdir()
@@ -541,10 +563,10 @@ class TestEmbedAllPdfs:
         mock_exists.return_value = False
 
         # First call raises, second succeeds.
-        fail_resp = MagicMock()
-        fail_resp.raise_for_status.side_effect = requests.HTTPError("503")
+        mock_client = MagicMock()
+        mock_client_ctor.return_value = mock_client
         ok_resp = _mock_embed_response(_fake_embedding(4))
-        mock_post.side_effect = [fail_resp, ok_resp]
+        mock_client.models.embed_content.side_effect = [RuntimeError("503"), ok_resp]
 
         with patch("vlmembed.embed.dotenv.load_dotenv"):
             results = embed_all_pdfs(
@@ -557,14 +579,14 @@ class TestEmbedAllPdfs:
             )
 
         assert len(results) == 1
-        assert mock_post.call_count == 2
+        assert mock_client.models.embed_content.call_count == 2
 
     @patch("vlmembed.store.get_collection")
     @patch("vlmembed.store.page_exists")
     @patch("vlmembed.store.upsert_page")
-    @patch("vlmembed.embed.requests.post")
+    @patch("vlmembed.embed.genai.Client")
     def test_raises_after_all_retries_exhausted(
-        self, mock_post, mock_upsert, mock_exists, mock_get_coll, tmp_path
+        self, mock_client_ctor, mock_upsert, mock_exists, mock_get_coll, tmp_path
     ):
         docs_dir = tmp_path / "docs"
         docs_dir.mkdir()
@@ -573,9 +595,9 @@ class TestEmbedAllPdfs:
         mock_get_coll.return_value = MagicMock()
         mock_exists.return_value = False
 
-        fail_resp = MagicMock()
-        fail_resp.raise_for_status.side_effect = requests.HTTPError("500")
-        mock_post.return_value = fail_resp
+        mock_client = MagicMock()
+        mock_client_ctor.return_value = mock_client
+        mock_client.models.embed_content.side_effect = RuntimeError("500")
 
         with patch("vlmembed.embed.dotenv.load_dotenv"):
             with pytest.raises(RuntimeError, match="failed after"):
@@ -588,16 +610,16 @@ class TestEmbedAllPdfs:
                     max_retries=2,
                 )
 
-        assert mock_post.call_count == 2
+            assert mock_client.models.embed_content.call_count == 2
 
     # -- multi-PDF --
 
     @patch("vlmembed.store.get_collection")
     @patch("vlmembed.store.page_exists")
     @patch("vlmembed.store.upsert_page")
-    @patch("vlmembed.embed.requests.post")
+    @patch("vlmembed.embed.genai.Client")
     def test_processes_multiple_pdfs(
-        self, mock_post, mock_upsert, mock_exists, mock_get_coll, tmp_path
+        self, mock_client_ctor, mock_upsert, mock_exists, mock_get_coll, tmp_path
     ):
         docs_dir = tmp_path / "docs"
         docs_dir.mkdir()
@@ -606,7 +628,11 @@ class TestEmbedAllPdfs:
 
         mock_get_coll.return_value = MagicMock()
         mock_exists.return_value = False
-        mock_post.return_value = _mock_embed_response(_fake_embedding(4))
+        mock_client = MagicMock()
+        mock_client_ctor.return_value = mock_client
+        mock_client.models.embed_content.return_value = _mock_embed_response(
+            _fake_embedding(4)
+        )
 
         with patch("vlmembed.embed.dotenv.load_dotenv"):
             results = embed_all_pdfs(
@@ -622,9 +648,9 @@ class TestEmbedAllPdfs:
     @patch("vlmembed.store.get_collection")
     @patch("vlmembed.store.page_exists")
     @patch("vlmembed.store.upsert_page")
-    @patch("vlmembed.embed.requests.post")
+    @patch("vlmembed.embed.genai.Client")
     def test_partial_skip_only_embeds_new(
-        self, mock_post, mock_upsert, mock_exists, mock_get_coll, tmp_path
+        self, mock_client_ctor, mock_upsert, mock_exists, mock_get_coll, tmp_path
     ):
         """When some pages exist and some don't, only new ones are embedded."""
         docs_dir = tmp_path / "docs"
@@ -634,7 +660,11 @@ class TestEmbedAllPdfs:
         mock_get_coll.return_value = MagicMock()
         # page 0 exists, pages 1+2 don't
         mock_exists.side_effect = [True, False, False]
-        mock_post.return_value = _mock_embed_response(_fake_embedding(4))
+        mock_client = MagicMock()
+        mock_client_ctor.return_value = mock_client
+        mock_client.models.embed_content.return_value = _mock_embed_response(
+            _fake_embedding(4)
+        )
 
         with patch("vlmembed.embed.dotenv.load_dotenv"):
             results = embed_all_pdfs(

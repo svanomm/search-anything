@@ -43,9 +43,6 @@ DEFAULT_USE_ENTERPRISE = True
 EMBEDDING_PROVIDER = "google-genai"
 STORE_SCHEMA_VERSION = "2"
 
-# Transitional constant retained until provider call migration is complete.
-OPENROUTER_EMBEDDINGS_URL = "https://openrouter.ai/api/v1/embeddings"
-
 # ---------------------------------------------------------------------------
 # Path helpers
 # ---------------------------------------------------------------------------

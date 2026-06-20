@@ -1,4 +1,4 @@
-"""PDF rendering and OpenRouter-based multimodal page embedding."""
+"""PDF rendering and Gemini Embedding 2 multimodal page embedding."""
 
 from __future__ import annotations
 
@@ -11,7 +11,8 @@ from pathlib import Path
 
 import dotenv
 import fitz
-import requests
+from google import genai
+from google.genai import types
 from tqdm import tqdm
 
 from vlmembed.contract import (
@@ -23,12 +24,25 @@ from vlmembed.contract import (
     DEFAULT_MAX_RETRIES,
     DEFAULT_MAX_WORKERS,
     DEFAULT_MODEL,
+    DEFAULT_USE_ENTERPRISE,
     ENV_API_KEY,
-    OPENROUTER_EMBEDDINGS_URL,
+    ENV_USE_ENTERPRISE,
     EmbedResult,
     PageMetadata,
     get_doc_images_dir,
 )
+
+
+def _build_genai_client(api_key: str):
+    """Return a configured google-genai client for embedding requests."""
+    if DEFAULT_USE_ENTERPRISE:
+        os.environ.setdefault(ENV_USE_ENTERPRISE, "True")
+    return genai.Client(api_key=api_key)
+
+
+def _extract_embedding_values(response) -> list[float]:
+    """Return the first embedding values list from a google-genai response."""
+    return list(response.embeddings[0].values)
 
 
 def compute_doc_hash(pdf_path: Path | str) -> str:
@@ -141,48 +155,35 @@ def embed_image_page(
     dimensions: int,
     image_format: str = DEFAULT_IMAGE_FORMAT,
 ) -> list[float]:
-    """Embed a single page image via the OpenRouter embeddings endpoint.
-
-    Uses the multimodal ``content`` array input format required by
-    Gemini Embedding 2 (not supported by the OpenAI SDK).
+    """Embed a single page image using the Google Gemini API.
 
     Args:
         base64_str: Base64-encoded page image.
-        model: Embedding model identifier (e.g. ``"google/gemini-embedding-2-preview"``).
-        api_key: OpenRouter API key.
+        model: Embedding model identifier (e.g. ``"gemini-embedding-2"``).
+        api_key: Google API key.
         dimensions: Number of embedding dimensions to request.
-        image_format: Image format used to construct the data-URI MIME type.
+        image_format: Image format used to construct the MIME type.
 
     Returns:
         Embedding vector as a list of floats.
-
-    Raises:
-        requests.HTTPError: On a non-2xx HTTP response.
     """
     mime = "image/jpeg" if image_format == "jpeg" else "image/png"
-    payload: dict = {
-        "model": model,
-        "input": [
-            {
-                "content": [
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:{mime};base64,{base64_str}"},
-                    }
-                ]
-            }
-        ],
-        "dimensions": dimensions,
-    }
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
-    response = requests.post(
-        OPENROUTER_EMBEDDINGS_URL, json=payload, headers=headers, timeout=60
+    image_bytes = base64.b64decode(base64_str)
+    content = types.Content(
+        parts=[
+            types.Part.from_bytes(
+                data=image_bytes,
+                mime_type=mime,
+            )
+        ]
     )
-    response.raise_for_status()
-    return response.json()["data"][0]["embedding"]
+    client = _build_genai_client(api_key)
+    response = client.models.embed_content(
+        model=model,
+        contents=[content],
+        config=types.EmbedContentConfig(output_dimensionality=dimensions),
+    )
+    return _extract_embedding_values(response)
 
 
 def embed_text_query(
@@ -192,37 +193,28 @@ def embed_text_query(
     api_key: str,
     dimensions: int,
 ) -> list[float]:
-    """Embed a text query via the OpenRouter embeddings endpoint.
+    """Embed a text query using the Google Gemini API.
 
-    Uses the same model as image embeddings for cross-modal retrieval —
-    Gemini Embedding 2 maps both text and images to a shared vector space.
+    Query text is prefixed with the retrieval task instruction recommended
+    for Gemini Embedding 2 search use-cases.
 
     Args:
         text: Query string to embed.
         model: Embedding model identifier.
-        api_key: OpenRouter API key.
+        api_key: Google API key.
         dimensions: Number of embedding dimensions to request.
 
     Returns:
         Embedding vector as a list of floats.
-
-    Raises:
-        requests.HTTPError: On a non-2xx HTTP response.
     """
-    payload: dict = {
-        "model": model,
-        "input": text,
-        "dimensions": dimensions,
-    }
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
-    response = requests.post(
-        OPENROUTER_EMBEDDINGS_URL, json=payload, headers=headers, timeout=60
+    prepared = f"task: search result | query: {text}"
+    client = _build_genai_client(api_key)
+    response = client.models.embed_content(
+        model=model,
+        contents=[prepared],
+        config=types.EmbedContentConfig(output_dimensionality=dimensions),
     )
-    response.raise_for_status()
-    return response.json()["data"][0]["embedding"]
+    return _extract_embedding_values(response)
 
 
 def embed_all_pdfs(
@@ -264,9 +256,6 @@ def embed_all_pdfs(
         FileNotFoundError: If *docs_dir* does not exist.
         RuntimeError: If any page fails after all retries are exhausted.
     """
-    # Lazy import so embed.py stays testable without a full store implementation.
-    from vlmembed import store as _store  # noqa: PLC0415
-
     if max_workers < 1:
         raise ValueError(f"max_workers must be >= 1, got {max_workers}")
 
@@ -277,6 +266,9 @@ def embed_all_pdfs(
             f"{ENV_API_KEY} is required. Set it in your environment, "
             f"pass --api-key, or add {ENV_API_KEY}=<key> to a .env file."
         )
+
+    # Lazy import so embed.py stays testable without a full store implementation.
+    from vlmembed import store as _store  # noqa: PLC0415
 
     docs_dir = Path(docs_dir)
     embed_dir = Path(embed_dir)

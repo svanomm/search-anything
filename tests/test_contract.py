@@ -23,7 +23,6 @@ from vlmembed.contract import (
     ENV_MAX_WORKERS,
     ENV_MODEL,
     ENV_USE_ENTERPRISE,
-    OPENROUTER_EMBEDDINGS_URL,
     STORE_SCHEMA_VERSION,
     EmbedResult,
     PageMetadata,
@@ -69,10 +68,6 @@ class TestDefaults:
 
     def test_schema_version(self):
         assert STORE_SCHEMA_VERSION == "2"
-
-    def test_openrouter_url(self):
-        assert OPENROUTER_EMBEDDINGS_URL == "https://openrouter.ai/api/v1/embeddings"
-
 
 class TestEnvVarNames:
     def test_api_key(self):

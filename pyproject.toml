@@ -9,7 +9,7 @@ description = "Multimodal PDF embedding and semantic search via OpenRouter and C
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "requests>=2.32.0",
+    "google-genai>=1.51.0",
     "pymupdf>=1.27.1",
     "chromadb>=0.5.0",
     "gradio>=5.0.0",
