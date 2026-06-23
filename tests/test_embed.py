@@ -1,4 +1,4 @@
-"""Unit tests for vlmembed.embed."""
+"""Unit tests for search_anything.embed."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 import fitz
 import pytest
 
-from vlmembed.embed import (
+from search_anything.embed import (
     compute_doc_hash,
     compute_settings_hash,
     embed_all_pdfs,
@@ -213,7 +213,7 @@ class TestEmbedImagePage:
     _FAKE_B64 = base64.b64encode(b"fake-image-data").decode()
     _EMBEDDING = [0.1, 0.2, 0.3]
 
-    @patch("vlmembed.embed.genai.Client")
+    @patch("search_anything.embed.genai.Client")
     def test_returns_embedding_list(self, mock_client_ctor):
         mock_client = MagicMock()
         mock_client_ctor.return_value = mock_client
@@ -225,7 +225,7 @@ class TestEmbedImagePage:
         )
         assert result == self._EMBEDDING
 
-    @patch("vlmembed.embed.genai.Client")
+    @patch("search_anything.embed.genai.Client")
     def test_client_initialized_with_api_key(self, mock_client_ctor):
         mock_client = MagicMock()
         mock_client_ctor.return_value = mock_client
@@ -235,7 +235,7 @@ class TestEmbedImagePage:
         embed_image_page(self._FAKE_B64, model="m", api_key="key", dimensions=3)
         mock_client_ctor.assert_called_once_with(api_key="key")
 
-    @patch("vlmembed.embed.genai.Client")
+    @patch("search_anything.embed.genai.Client")
     def test_calls_embed_content_with_model(self, mock_client_ctor):
         mock_client = MagicMock()
         mock_client_ctor.return_value = mock_client
@@ -248,7 +248,7 @@ class TestEmbedImagePage:
         assert "contents" in kwargs
         assert "config" in kwargs
 
-    @patch("vlmembed.embed.genai.Client")
+    @patch("search_anything.embed.genai.Client")
     def test_png_mime_type(self, mock_client_ctor):
         mock_client = MagicMock()
         mock_client_ctor.return_value = mock_client
@@ -261,7 +261,7 @@ class TestEmbedImagePage:
         content = mock_client.models.embed_content.call_args.kwargs["contents"][0]
         assert content.parts[0].inline_data.mime_type == "image/png"
 
-    @patch("vlmembed.embed.genai.Client")
+    @patch("search_anything.embed.genai.Client")
     def test_jpeg_mime_type(self, mock_client_ctor):
         mock_client = MagicMock()
         mock_client_ctor.return_value = mock_client
@@ -274,7 +274,7 @@ class TestEmbedImagePage:
         content = mock_client.models.embed_content.call_args.kwargs["contents"][0]
         assert content.parts[0].inline_data.mime_type == "image/jpeg"
 
-    @patch("vlmembed.embed.genai.Client")
+    @patch("search_anything.embed.genai.Client")
     def test_api_error_is_propagated(self, mock_client_ctor):
         mock_client = MagicMock()
         mock_client_ctor.return_value = mock_client
@@ -291,7 +291,7 @@ class TestEmbedImagePage:
 class TestEmbedTextQuery:
     _EMBEDDING = [0.5, 0.6, 0.7]
 
-    @patch("vlmembed.embed.genai.Client")
+    @patch("search_anything.embed.genai.Client")
     def test_returns_embedding_list(self, mock_client_ctor):
         mock_client = MagicMock()
         mock_client_ctor.return_value = mock_client
@@ -301,7 +301,7 @@ class TestEmbedTextQuery:
         result = embed_text_query("hello world", model="m", api_key="k", dimensions=3)
         assert result == self._EMBEDDING
 
-    @patch("vlmembed.embed.genai.Client")
+    @patch("search_anything.embed.genai.Client")
     def test_input_uses_retrieval_instruction(self, mock_client_ctor):
         mock_client = MagicMock()
         mock_client_ctor.return_value = mock_client
@@ -313,7 +313,7 @@ class TestEmbedTextQuery:
         assert kwargs["contents"] == ["task: search result | query: search query"]
         assert kwargs["model"] == "mymodel"
 
-    @patch("vlmembed.embed.genai.Client")
+    @patch("search_anything.embed.genai.Client")
     def test_client_initialized_with_api_key(self, mock_client_ctor):
         mock_client = MagicMock()
         mock_client_ctor.return_value = mock_client
@@ -323,7 +323,7 @@ class TestEmbedTextQuery:
         embed_text_query("q", model="m", api_key="tok", dimensions=3)
         mock_client_ctor.assert_called_once_with(api_key="tok")
 
-    @patch("vlmembed.embed.genai.Client")
+    @patch("search_anything.embed.genai.Client")
     def test_calls_embed_content_with_model(self, mock_client_ctor):
         mock_client = MagicMock()
         mock_client_ctor.return_value = mock_client
@@ -334,7 +334,7 @@ class TestEmbedTextQuery:
         kwargs = mock_client.models.embed_content.call_args.kwargs
         assert kwargs["model"] == "m"
 
-    @patch("vlmembed.embed.genai.Client")
+    @patch("search_anything.embed.genai.Client")
     def test_api_error_propagated(self, mock_client_ctor):
         mock_client = MagicMock()
         mock_client_ctor.return_value = mock_client
@@ -364,7 +364,7 @@ class TestEmbedAllPdfs:
         docs_dir = tmp_path / "docs"
         docs_dir.mkdir()
         with patch.dict(os.environ, {}, clear=True):
-            with patch("vlmembed.embed.dotenv.load_dotenv"):
+            with patch("search_anything.embed.dotenv.load_dotenv"):
                 with pytest.raises(ValueError, match="GOOGLE_API_KEY"):
                     embed_all_pdfs(docs_dir, tmp_path / "embed", api_key=None)
 
@@ -383,10 +383,10 @@ class TestEmbedAllPdfs:
             )
 
     @patch(
-        "vlmembed.store.ensure_store_compatibility",
+        "search_anything.store.ensure_store_compatibility",
         side_effect=RuntimeError("Store metadata mismatch"),
     )
-    @patch("vlmembed.store.get_collection")
+    @patch("search_anything.store.get_collection")
     def test_store_metadata_mismatch_fails_fast(
         self, mock_get_coll, mock_ensure_compat, tmp_path
     ):
@@ -394,7 +394,7 @@ class TestEmbedAllPdfs:
         docs_dir.mkdir()
         _make_pdf(docs_dir / "in.pdf", num_pages=1)
 
-        with patch("vlmembed.embed.dotenv.load_dotenv"):
+        with patch("search_anything.embed.dotenv.load_dotenv"):
             with pytest.raises(RuntimeError, match="Store metadata mismatch"):
                 embed_all_pdfs(
                     docs_dir,
@@ -414,9 +414,9 @@ class TestEmbedAllPdfs:
 
     # -- skip logic --
 
-    @patch("vlmembed.store.get_collection")
-    @patch("vlmembed.store.page_exists")
-    @patch("vlmembed.store.upsert_page")
+    @patch("search_anything.store.get_collection")
+    @patch("search_anything.store.page_exists")
+    @patch("search_anything.store.upsert_page")
     def test_skips_already_embedded_pages(
         self, mock_upsert, mock_exists, mock_get_coll, tmp_path
     ):
@@ -427,7 +427,7 @@ class TestEmbedAllPdfs:
         mock_get_coll.return_value = MagicMock()
         mock_exists.return_value = True  # All pages already in store
 
-        with patch("vlmembed.embed.dotenv.load_dotenv"):
+        with patch("search_anything.embed.dotenv.load_dotenv"):
             result = embed_all_pdfs(
                 docs_dir, tmp_path / "embed", api_key="testkey"
             )
@@ -437,10 +437,10 @@ class TestEmbedAllPdfs:
 
     # -- happy path --
 
-    @patch("vlmembed.store.get_collection")
-    @patch("vlmembed.store.page_exists")
-    @patch("vlmembed.store.upsert_page")
-    @patch("vlmembed.embed.genai.Client")
+    @patch("search_anything.store.get_collection")
+    @patch("search_anything.store.page_exists")
+    @patch("search_anything.store.upsert_page")
+    @patch("search_anything.embed.genai.Client")
     def test_embeds_new_pages(
         self, mock_client_ctor, mock_upsert, mock_exists, mock_get_coll, tmp_path
     ):
@@ -455,7 +455,7 @@ class TestEmbedAllPdfs:
         mock_client_ctor.return_value = mock_client
         mock_client.models.embed_content.return_value = _mock_embed_response(fake_emb)
 
-        with patch("vlmembed.embed.dotenv.load_dotenv"):
+        with patch("search_anything.embed.dotenv.load_dotenv"):
             results = embed_all_pdfs(
                 docs_dir,
                 tmp_path / "embed",
@@ -474,10 +474,10 @@ class TestEmbedAllPdfs:
             assert r["metadata"]["doc_hash"] != ""
             assert r["metadata"]["settings_hash"] != ""
 
-    @patch("vlmembed.store.get_collection")
-    @patch("vlmembed.store.page_exists")
-    @patch("vlmembed.store.upsert_page")
-    @patch("vlmembed.embed.genai.Client")
+    @patch("search_anything.store.get_collection")
+    @patch("search_anything.store.page_exists")
+    @patch("search_anything.store.upsert_page")
+    @patch("search_anything.embed.genai.Client")
     def test_page_ids_contain_doc_hash_and_index(
         self, mock_client_ctor, mock_upsert, mock_exists, mock_get_coll, tmp_path
     ):
@@ -493,7 +493,7 @@ class TestEmbedAllPdfs:
             _fake_embedding(4)
         )
 
-        with patch("vlmembed.embed.dotenv.load_dotenv"):
+        with patch("search_anything.embed.dotenv.load_dotenv"):
             results = embed_all_pdfs(
                 docs_dir,
                 tmp_path / "embed",
@@ -505,10 +505,10 @@ class TestEmbedAllPdfs:
         expected_hash = compute_doc_hash(pdf)
         assert results[0]["page_id"] == f"{expected_hash}_0"
 
-    @patch("vlmembed.store.get_collection")
-    @patch("vlmembed.store.page_exists")
-    @patch("vlmembed.store.upsert_page")
-    @patch("vlmembed.embed.genai.Client")
+    @patch("search_anything.store.get_collection")
+    @patch("search_anything.store.page_exists")
+    @patch("search_anything.store.upsert_page")
+    @patch("search_anything.embed.genai.Client")
     def test_image_files_are_cached_to_disk(
         self, mock_client_ctor, mock_upsert, mock_exists, mock_get_coll, tmp_path
     ):
@@ -525,7 +525,7 @@ class TestEmbedAllPdfs:
             _fake_embedding(4)
         )
 
-        with patch("vlmembed.embed.dotenv.load_dotenv"):
+        with patch("search_anything.embed.dotenv.load_dotenv"):
             results = embed_all_pdfs(
                 docs_dir, embed_dir, api_key="k", dimensions=4, max_workers=1
             )
@@ -534,10 +534,10 @@ class TestEmbedAllPdfs:
         assert image_cache.exists()
         assert image_cache.name == "page_1.png"
 
-    @patch("vlmembed.store.get_collection")
-    @patch("vlmembed.store.page_exists")
-    @patch("vlmembed.store.upsert_page")
-    @patch("vlmembed.embed.genai.Client")
+    @patch("search_anything.store.get_collection")
+    @patch("search_anything.store.page_exists")
+    @patch("search_anything.store.upsert_page")
+    @patch("search_anything.embed.genai.Client")
     def test_settings_hash_in_metadata(
         self, mock_client_ctor, mock_upsert, mock_exists, mock_get_coll, tmp_path
     ):
@@ -553,7 +553,7 @@ class TestEmbedAllPdfs:
             _fake_embedding(4)
         )
 
-        with patch("vlmembed.embed.dotenv.load_dotenv"):
+        with patch("search_anything.embed.dotenv.load_dotenv"):
             results = embed_all_pdfs(
                 docs_dir,
                 tmp_path / "embed",
@@ -572,10 +572,10 @@ class TestEmbedAllPdfs:
 
     # -- retry logic --
 
-    @patch("vlmembed.store.get_collection")
-    @patch("vlmembed.store.page_exists")
-    @patch("vlmembed.store.upsert_page")
-    @patch("vlmembed.embed.genai.Client")
+    @patch("search_anything.store.get_collection")
+    @patch("search_anything.store.page_exists")
+    @patch("search_anything.store.upsert_page")
+    @patch("search_anything.embed.genai.Client")
     def test_retries_on_transient_error(
         self, mock_client_ctor, mock_upsert, mock_exists, mock_get_coll, tmp_path
     ):
@@ -592,7 +592,7 @@ class TestEmbedAllPdfs:
         ok_resp = _mock_embed_response(_fake_embedding(4))
         mock_client.models.embed_content.side_effect = [RuntimeError("503"), ok_resp]
 
-        with patch("vlmembed.embed.dotenv.load_dotenv"):
+        with patch("search_anything.embed.dotenv.load_dotenv"):
             results = embed_all_pdfs(
                 docs_dir,
                 tmp_path / "embed",
@@ -605,10 +605,10 @@ class TestEmbedAllPdfs:
         assert len(results) == 1
         assert mock_client.models.embed_content.call_count == 2
 
-    @patch("vlmembed.store.get_collection")
-    @patch("vlmembed.store.page_exists")
-    @patch("vlmembed.store.upsert_page")
-    @patch("vlmembed.embed.genai.Client")
+    @patch("search_anything.store.get_collection")
+    @patch("search_anything.store.page_exists")
+    @patch("search_anything.store.upsert_page")
+    @patch("search_anything.embed.genai.Client")
     def test_raises_after_all_retries_exhausted(
         self, mock_client_ctor, mock_upsert, mock_exists, mock_get_coll, tmp_path
     ):
@@ -623,7 +623,7 @@ class TestEmbedAllPdfs:
         mock_client_ctor.return_value = mock_client
         mock_client.models.embed_content.side_effect = RuntimeError("500")
 
-        with patch("vlmembed.embed.dotenv.load_dotenv"):
+        with patch("search_anything.embed.dotenv.load_dotenv"):
             with pytest.raises(RuntimeError, match="failed after"):
                 embed_all_pdfs(
                     docs_dir,
@@ -638,10 +638,10 @@ class TestEmbedAllPdfs:
 
     # -- multi-PDF --
 
-    @patch("vlmembed.store.get_collection")
-    @patch("vlmembed.store.page_exists")
-    @patch("vlmembed.store.upsert_page")
-    @patch("vlmembed.embed.genai.Client")
+    @patch("search_anything.store.get_collection")
+    @patch("search_anything.store.page_exists")
+    @patch("search_anything.store.upsert_page")
+    @patch("search_anything.embed.genai.Client")
     def test_processes_multiple_pdfs(
         self, mock_client_ctor, mock_upsert, mock_exists, mock_get_coll, tmp_path
     ):
@@ -658,7 +658,7 @@ class TestEmbedAllPdfs:
             _fake_embedding(4)
         )
 
-        with patch("vlmembed.embed.dotenv.load_dotenv"):
+        with patch("search_anything.embed.dotenv.load_dotenv"):
             results = embed_all_pdfs(
                 docs_dir,
                 tmp_path / "embed",
@@ -669,10 +669,10 @@ class TestEmbedAllPdfs:
 
         assert len(results) == 3  # 1 + 2 pages
 
-    @patch("vlmembed.store.get_collection")
-    @patch("vlmembed.store.page_exists")
-    @patch("vlmembed.store.upsert_page")
-    @patch("vlmembed.embed.genai.Client")
+    @patch("search_anything.store.get_collection")
+    @patch("search_anything.store.page_exists")
+    @patch("search_anything.store.upsert_page")
+    @patch("search_anything.embed.genai.Client")
     def test_partial_skip_only_embeds_new(
         self, mock_client_ctor, mock_upsert, mock_exists, mock_get_coll, tmp_path
     ):
@@ -690,7 +690,7 @@ class TestEmbedAllPdfs:
             _fake_embedding(4)
         )
 
-        with patch("vlmembed.embed.dotenv.load_dotenv"):
+        with patch("search_anything.embed.dotenv.load_dotenv"):
             results = embed_all_pdfs(
                 docs_dir,
                 tmp_path / "embed",
@@ -704,10 +704,10 @@ class TestEmbedAllPdfs:
 
     # -- recursive multimodal ingestion --
 
-    @patch("vlmembed.store.get_collection")
-    @patch("vlmembed.store.page_exists")
-    @patch("vlmembed.store.upsert_page")
-    @patch("vlmembed.embed.genai.Client")
+    @patch("search_anything.store.get_collection")
+    @patch("search_anything.store.page_exists")
+    @patch("search_anything.store.upsert_page")
+    @patch("search_anything.embed.genai.Client")
     def test_recursively_processes_nested_pdf(
         self, mock_client_ctor, mock_upsert, mock_exists, mock_get_coll, tmp_path
     ):
@@ -724,7 +724,7 @@ class TestEmbedAllPdfs:
             _fake_embedding(4)
         )
 
-        with patch("vlmembed.embed.dotenv.load_dotenv"):
+        with patch("search_anything.embed.dotenv.load_dotenv"):
             results = embed_all_pdfs(
                 docs_dir,
                 tmp_path / "embed",
@@ -737,11 +737,11 @@ class TestEmbedAllPdfs:
         assert results[0]["metadata"]["doc_path"].endswith("nested.pdf")
         assert mock_upsert.call_count == 1
 
-    @patch("vlmembed.embed._chunk_text_file", return_value=["chunk 1", "chunk 2"])
-    @patch("vlmembed.store.get_collection")
-    @patch("vlmembed.store.page_exists")
-    @patch("vlmembed.store.upsert_page")
-    @patch("vlmembed.embed.genai.Client")
+    @patch("search_anything.embed._chunk_text_file", return_value=["chunk 1", "chunk 2"])
+    @patch("search_anything.store.get_collection")
+    @patch("search_anything.store.page_exists")
+    @patch("search_anything.store.upsert_page")
+    @patch("search_anything.embed.genai.Client")
     def test_embeds_text_chunks_for_markdown(
         self,
         mock_client_ctor,
@@ -763,7 +763,7 @@ class TestEmbedAllPdfs:
             _fake_embedding(4)
         )
 
-        with patch("vlmembed.embed.dotenv.load_dotenv"):
+        with patch("search_anything.embed.dotenv.load_dotenv"):
             results = embed_all_pdfs(
                 docs_dir,
                 tmp_path / "embed",
@@ -779,10 +779,10 @@ class TestEmbedAllPdfs:
         assert mock_chunk_file.call_count == 1
         assert mock_upsert.call_count == 2
 
-    @patch("vlmembed.store.get_collection")
-    @patch("vlmembed.store.page_exists")
-    @patch("vlmembed.store.upsert_page")
-    @patch("vlmembed.embed.genai.Client")
+    @patch("search_anything.store.get_collection")
+    @patch("search_anything.store.page_exists")
+    @patch("search_anything.store.upsert_page")
+    @patch("search_anything.embed.genai.Client")
     def test_embeds_image_file_and_uses_source_path_as_cache(
         self, mock_client_ctor, mock_upsert, mock_exists, mock_get_coll, tmp_path
     ):
@@ -799,7 +799,7 @@ class TestEmbedAllPdfs:
             _fake_embedding(4)
         )
 
-        with patch("vlmembed.embed.dotenv.load_dotenv"):
+        with patch("search_anything.embed.dotenv.load_dotenv"):
             results = embed_all_pdfs(
                 docs_dir,
                 tmp_path / "embed",
@@ -814,13 +814,13 @@ class TestEmbedAllPdfs:
         assert mock_upsert.call_count == 1
 
     @patch(
-        "vlmembed.embed._build_audio_byte_windows",
+        "search_anything.embed._build_audio_byte_windows",
         return_value=[(0, 3), (3, 6), (6, 9)],
     )
-    @patch("vlmembed.store.get_collection")
-    @patch("vlmembed.store.page_exists")
-    @patch("vlmembed.store.upsert_page")
-    @patch("vlmembed.embed.genai.Client")
+    @patch("search_anything.store.get_collection")
+    @patch("search_anything.store.page_exists")
+    @patch("search_anything.store.upsert_page")
+    @patch("search_anything.embed.genai.Client")
     def test_embeds_three_audio_segments(
         self,
         mock_client_ctor,
@@ -842,7 +842,7 @@ class TestEmbedAllPdfs:
             _fake_embedding(4)
         )
 
-        with patch("vlmembed.embed.dotenv.load_dotenv"):
+        with patch("search_anything.embed.dotenv.load_dotenv"):
             results = embed_all_pdfs(
                 docs_dir,
                 tmp_path / "embed",
@@ -865,10 +865,10 @@ class TestEmbedAllPdfs:
         assert mock_windows.call_count == 1
         assert mock_upsert.call_count == 3
 
-    @patch("vlmembed.store.get_collection")
-    @patch("vlmembed.store.page_exists")
-    @patch("vlmembed.store.upsert_page")
-    @patch("vlmembed.embed.genai.Client")
+    @patch("search_anything.store.get_collection")
+    @patch("search_anything.store.page_exists")
+    @patch("search_anything.store.upsert_page")
+    @patch("search_anything.embed.genai.Client")
     def test_embeds_three_video_offsets(
         self, mock_client_ctor, mock_upsert, mock_exists, mock_get_coll, tmp_path
     ):
@@ -884,7 +884,7 @@ class TestEmbedAllPdfs:
             _fake_embedding(4)
         )
 
-        with patch("vlmembed.embed.dotenv.load_dotenv"):
+        with patch("search_anything.embed.dotenv.load_dotenv"):
             results = embed_all_pdfs(
                 docs_dir,
                 tmp_path / "embed",

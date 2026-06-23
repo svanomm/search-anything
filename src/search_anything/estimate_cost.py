@@ -7,7 +7,7 @@ from pathlib import Path
 
 import fitz
 
-from vlmembed.contract import DEFAULT_DOCS_DIR, DEFAULT_DPI
+from search_anything.contract import DEFAULT_DOCS_DIR, DEFAULT_DPI
 
 # ---------------------------------------------------------------------------
 # Pricing constants

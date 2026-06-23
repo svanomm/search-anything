@@ -1,4 +1,4 @@
-"""Tests for vlmembed.store (Phase 3)."""
+"""Tests for search_anything.store (Phase 3)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 import chromadb
 import pytest
 
-from vlmembed.store import (
+from search_anything.store import (
     ensure_store_compatibility,
     get_collection,
     get_cached_embedding,

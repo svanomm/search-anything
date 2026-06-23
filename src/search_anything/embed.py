@@ -17,7 +17,7 @@ from google import genai
 from google.genai import types
 from tqdm import tqdm
 
-from vlmembed.contract import (
+from search_anything.contract import (
     DEFAULT_DIMENSIONS,
     DEFAULT_DPI,
     DEFAULT_DOCS_DIR,
@@ -492,7 +492,7 @@ def embed_all_pdfs(
         max_retries: Number of attempts per task before raising an error.
 
     Returns:
-        List of :class:`~vlmembed.contract.EmbedResult` dicts for newly
+        List of :class:`~search_anything.contract.EmbedResult` dicts for newly
         embedded tasks (already-present tasks are not included).
 
     Raises:
@@ -512,7 +512,7 @@ def embed_all_pdfs(
         )
 
     # Lazy import so embed.py stays testable without a full store implementation.
-    from vlmembed import store as _store  # noqa: PLC0415
+    from search_anything import store as _store  # noqa: PLC0415
 
     docs_dir = Path(docs_dir)
     embed_dir = Path(embed_dir)

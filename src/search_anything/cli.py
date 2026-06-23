@@ -9,7 +9,7 @@ from pathlib import Path
 
 import dotenv
 
-from vlmembed.contract import (
+from search_anything.contract import (
     DEFAULT_DIMENSIONS,
     DEFAULT_DPI,
     DEFAULT_DOCS_DIR,
@@ -119,9 +119,9 @@ def _estimate_pending_embedding_cost(
     """Estimate cost for pending PDF pages discovered recursively."""
     import fitz  # noqa: PLC0415
 
-    from vlmembed.embed import compute_doc_hash  # noqa: PLC0415
-    from vlmembed.estimate_cost import estimate_cost_from_page_counts  # noqa: PLC0415
-    from vlmembed.store import get_collection, page_exists  # noqa: PLC0415
+    from search_anything.embed import compute_doc_hash  # noqa: PLC0415
+    from search_anything.estimate_cost import estimate_cost_from_page_counts  # noqa: PLC0415
+    from search_anything.store import get_collection, page_exists  # noqa: PLC0415
 
     if not docs_dir.exists():
         raise FileNotFoundError(f"Docs directory not found: {docs_dir}")
@@ -185,7 +185,7 @@ def cmd_init(args: argparse.Namespace) -> int:
 
 def cmd_embed(args: argparse.Namespace) -> int:
     """Embed all unprocessed supported files into the ChromaDB vector store."""
-    from vlmembed.embed import embed_all_pdfs  # noqa: PLC0415
+    from search_anything.embed import embed_all_pdfs  # noqa: PLC0415
 
     dotenv.load_dotenv()
     _ensure_google_enterprise_env()
@@ -257,7 +257,7 @@ def cmd_embed(args: argparse.Namespace) -> int:
 
 def cmd_search(args: argparse.Namespace) -> int:
     """Launch the Gradio semantic search UI."""
-    from vlmembed.search_app import launch_search_app  # noqa: PLC0415
+    from search_anything.search_app import launch_search_app  # noqa: PLC0415
 
     # launch_search_app calls dotenv.load_dotenv() internally; load it here
     # too so that env-var fallback for model/dimensions works correctly.
@@ -289,7 +289,7 @@ def cmd_search(args: argparse.Namespace) -> int:
 
 def cmd_estimate_cost(args: argparse.Namespace) -> int:
     """Estimate the cost to embed supported files in the docs directory."""
-    from vlmembed.estimate_cost import estimate_cost  # noqa: PLC0415
+    from search_anything.estimate_cost import estimate_cost  # noqa: PLC0415
 
     docs_dir = Path(args.docs_dir)
     dpi = _resolve_int(getattr(args, "dpi", None), ENV_DPI, DEFAULT_DPI)
@@ -338,7 +338,7 @@ def cmd_estimate_cost(args: argparse.Namespace) -> int:
 
 def cmd_reset_store(args: argparse.Namespace) -> int:
     """Remove persisted store artifacts so embeddings can be rebuilt cleanly."""
-    from vlmembed.store import reset_store  # noqa: PLC0415
+    from search_anything.store import reset_store  # noqa: PLC0415
 
     embed_dir = Path(args.embed_dir)
 

@@ -1,4 +1,4 @@
-"""Gradio-based semantic search UI for vlmembed.
+"""Gradio-based semantic search UI for search_anything.
 
 Launch with :func:`launch_search_app`.  Called from ``cli.py`` in Phase 6.
 """
@@ -11,7 +11,7 @@ from pathlib import Path
 import dotenv
 import gradio as gr
 
-from vlmembed.contract import (
+from search_anything.contract import (
     DEFAULT_DIMENSIONS,
     DEFAULT_EMBED_DIR,
     DEFAULT_MODEL,
@@ -19,8 +19,8 @@ from vlmembed.contract import (
     ENV_API_KEY,
     ENV_USE_ENTERPRISE,
 )
-from vlmembed.embed import embed_text_query
-from vlmembed.store import (
+from search_anything.embed import embed_text_query
+from search_anything.store import (
     ensure_store_compatibility,
     get_cached_embedding,
     get_collection,
@@ -241,7 +241,7 @@ def build_search_app(
         embed_dir=embed_dir,
     )
 
-    with gr.Blocks(title="vlmembed — PDF Semantic Search") as demo:
+    with gr.Blocks(title="search_anything — PDF Semantic Search") as demo:
         gr.Markdown("# PDF Semantic Search\nEnter a text query to find the most relevant PDF pages.")
 
         with gr.Row(equal_height=True):

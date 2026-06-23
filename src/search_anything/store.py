@@ -10,7 +10,7 @@ from pathlib import Path
 
 import chromadb
 
-from vlmembed.contract import (
+from search_anything.contract import (
     EMBEDDING_PROVIDER,
     STORE_SCHEMA_VERSION,
     StoreMetadata,
@@ -307,7 +307,7 @@ def upsert_page(
         page_id: Composite page identifier ``"{doc_hash}_{page_idx}"``.
         embedding: Embedding vector.
         metadata: Metadata dict conforming to
-            :class:`~vlmembed.contract.PageMetadata`.
+            :class:`~search_anything.contract.PageMetadata`.
     """
     collection.upsert(
         ids=[page_id],
@@ -329,7 +329,7 @@ def search(
         n_results: Maximum number of results to return.
 
     Returns:
-        List of dicts conforming to :class:`~vlmembed.contract.SearchResult`.
+        List of dicts conforming to :class:`~search_anything.contract.SearchResult`.
     """
     result = collection.query(
         query_embeddings=[query_embedding],

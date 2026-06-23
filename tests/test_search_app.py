@@ -1,4 +1,4 @@
-"""Unit tests for vlmembed.search_app (Phase 4)."""
+"""Unit tests for search_anything.search_app (Phase 4)."""
 
 from __future__ import annotations
 
@@ -58,35 +58,35 @@ def _mock_collection(count: int = 10) -> MagicMock:
 
 class TestMakeCaption:
     def test_format_filename_page_score(self):
-        from vlmembed.search_app import _make_caption
+        from search_anything.search_app import _make_caption
 
         meta = _make_metadata(page_number=2, doc_path="docs/annual_report.pdf")
         caption = _make_caption(meta, distance=0.3)
         assert caption == "annual_report.pdf · page 2 · score 0.700"
 
     def test_page_number_one_indexed(self):
-        from vlmembed.search_app import _make_caption
+        from search_anything.search_app import _make_caption
 
         meta = _make_metadata(page_number=1)
         caption = _make_caption(meta, distance=0.0)
         assert "page 1" in caption
 
     def test_score_is_one_minus_distance(self):
-        from vlmembed.search_app import _make_caption
+        from search_anything.search_app import _make_caption
 
         meta = _make_metadata(page_number=1)
         caption = _make_caption(meta, distance=0.5)
         assert "score 0.500" in caption
 
     def test_unknown_doc_path(self):
-        from vlmembed.search_app import _make_caption
+        from search_anything.search_app import _make_caption
 
         meta = _make_metadata(doc_path="unknown")
         caption = _make_caption(meta, distance=0.1)
         assert "unknown" in caption
 
     def test_non_pdf_includes_modality_and_segment_label(self):
-        from vlmembed.search_app import _make_caption
+        from search_anything.search_app import _make_caption
 
         meta = _make_metadata(page_number=2, doc_path="docs/clip.mp3")
         caption = _make_caption(meta, distance=0.2)
@@ -101,13 +101,13 @@ class TestMakeCaption:
 
 class TestLoadImage:
     def test_returns_none_for_nonexistent_path(self):
-        from vlmembed.search_app import _load_image
+        from search_anything.search_app import _load_image
 
         result = _load_image("/does/not/exist/page_1.png")
         assert result is None
 
     def test_returns_none_for_empty_string(self):
-        from vlmembed.search_app import _load_image
+        from search_anything.search_app import _load_image
 
         result = _load_image("")
         assert result is None
@@ -115,7 +115,7 @@ class TestLoadImage:
     def test_returns_pil_image_for_valid_file(self, tmp_path):
         from PIL import Image
 
-        from vlmembed.search_app import _load_image
+        from search_anything.search_app import _load_image
 
         img_path = tmp_path / "page_1.png"
         Image.new("RGB", (10, 10), color=(255, 0, 0)).save(str(img_path))
@@ -132,14 +132,14 @@ class TestLoadImage:
 
 class TestBuildGalleryItems:
     def test_empty_results_returns_empty_list(self):
-        from vlmembed.search_app import _build_gallery_items
+        from search_anything.search_app import _build_gallery_items
 
         assert _build_gallery_items([]) == []
 
     def test_missing_image_produces_placeholder_tile(self):
         from PIL import Image
 
-        from vlmembed.search_app import _build_gallery_items
+        from search_anything.search_app import _build_gallery_items
 
         results = [_make_result(image_cache_path="/no/such/file.png")]
         items = _build_gallery_items(results)
@@ -149,7 +149,7 @@ class TestBuildGalleryItems:
         assert "report.pdf" in caption
 
     def test_non_image_result_gets_modality_caption(self):
-        from vlmembed.search_app import _build_gallery_items
+        from search_anything.search_app import _build_gallery_items
 
         results = [
             _make_result(
@@ -165,7 +165,7 @@ class TestBuildGalleryItems:
     def test_valid_image_produces_pil_tile(self, tmp_path):
         from PIL import Image
 
-        from vlmembed.search_app import _build_gallery_items
+        from search_anything.search_app import _build_gallery_items
 
         img_path = tmp_path / "page_1.png"
         Image.new("RGB", (10, 10)).save(str(img_path))
@@ -177,7 +177,7 @@ class TestBuildGalleryItems:
         assert isinstance(img, Image.Image)
 
     def test_multiple_results_preserve_order(self):
-        from vlmembed.search_app import _build_gallery_items
+        from search_anything.search_app import _build_gallery_items
 
         results = [_make_result(page_number=i + 1) for i in range(3)]
         items = _build_gallery_items(results)
@@ -186,7 +186,7 @@ class TestBuildGalleryItems:
             assert f"page {i + 1}" in caption
 
     def test_caption_contains_score(self):
-        from vlmembed.search_app import _build_gallery_items
+        from search_anything.search_app import _build_gallery_items
 
         results = [_make_result(distance=0.25)]
         _, caption = _build_gallery_items(results)[0]
@@ -201,9 +201,9 @@ class TestBuildGalleryItems:
 class TestBuildSearchApp:
     """Test that build_search_app returns a Gradio Blocks without errors."""
 
-    @patch("vlmembed.search_app.get_collection")
+    @patch("search_anything.search_app.get_collection")
     def test_returns_blocks_instance(self, mock_get_col, tmp_path):
-        from vlmembed.search_app import build_search_app
+        from search_anything.search_app import build_search_app
 
         mock_get_col.return_value = _mock_collection()
         demo = build_search_app(
@@ -214,9 +214,9 @@ class TestBuildSearchApp:
         )
         assert isinstance(demo, gr.Blocks)
 
-    @patch("vlmembed.search_app.get_collection")
+    @patch("search_anything.search_app.get_collection")
     def test_collection_opened_with_correct_embed_dir(self, mock_get_col, tmp_path):
-        from vlmembed.search_app import build_search_app
+        from search_anything.search_app import build_search_app
 
         mock_get_col.return_value = _mock_collection()
         build_search_app(
@@ -227,10 +227,10 @@ class TestBuildSearchApp:
         )
         mock_get_col.assert_called_once_with(tmp_path)
 
-    @patch("vlmembed.search_app.ensure_store_compatibility")
-    @patch("vlmembed.search_app.get_collection")
+    @patch("search_anything.search_app.ensure_store_compatibility")
+    @patch("search_anything.search_app.get_collection")
     def test_validates_store_compatibility(self, mock_get_col, mock_compat, tmp_path):
-        from vlmembed.search_app import build_search_app
+        from search_anything.search_app import build_search_app
 
         mock_get_col.return_value = _mock_collection()
         build_search_app(
@@ -254,20 +254,20 @@ class TestBuildSearchApp:
 class TestRunSearch:
     """Test the search callback via make_search_fn, which is testable directly."""
 
-    @patch("vlmembed.search_app.embed_text_query", return_value=_FAKE_EMBEDDING)
-    @patch("vlmembed.search_app.search", return_value=[])
+    @patch("search_anything.search_app.embed_text_query", return_value=_FAKE_EMBEDDING)
+    @patch("search_anything.search_app.search", return_value=[])
     def test_empty_query_returns_no_results(self, mock_search, mock_embed):
-        from vlmembed.search_app import make_search_fn
+        from search_anything.search_app import make_search_fn
 
         run_search = make_search_fn(_mock_collection(count=5), api_key="key", model="m", dimensions=_DIM)
         result = run_search("   ", 5)
         assert result == []
         mock_embed.assert_not_called()
 
-    @patch("vlmembed.search_app.embed_text_query", return_value=_FAKE_EMBEDDING)
-    @patch("vlmembed.search_app.search")
+    @patch("search_anything.search_app.embed_text_query", return_value=_FAKE_EMBEDDING)
+    @patch("search_anything.search_app.search")
     def test_empty_collection_returns_no_results(self, mock_search, mock_embed):
-        from vlmembed.search_app import make_search_fn
+        from search_anything.search_app import make_search_fn
 
         run_search = make_search_fn(_mock_collection(count=0), api_key="key", model="m", dimensions=_DIM)
         result = run_search("find something", 5)
@@ -275,10 +275,10 @@ class TestRunSearch:
         mock_embed.assert_not_called()
         mock_search.assert_not_called()
 
-    @patch("vlmembed.search_app.embed_text_query", return_value=_FAKE_EMBEDDING)
-    @patch("vlmembed.search_app.search")
+    @patch("search_anything.search_app.embed_text_query", return_value=_FAKE_EMBEDDING)
+    @patch("search_anything.search_app.search")
     def test_n_results_capped_at_collection_count(self, mock_search, mock_embed):
-        from vlmembed.search_app import make_search_fn
+        from search_anything.search_app import make_search_fn
 
         mock_search.return_value = [_make_result(page_number=i) for i in range(3)]
         run_search = make_search_fn(_mock_collection(count=3), api_key="key", model="m", dimensions=_DIM)
@@ -286,10 +286,10 @@ class TestRunSearch:
         call_n = mock_search.call_args[1].get("n_results") or mock_search.call_args[0][2]
         assert call_n <= 3
 
-    @patch("vlmembed.search_app.embed_text_query", return_value=_FAKE_EMBEDDING)
-    @patch("vlmembed.search_app.search", return_value=[])
+    @patch("search_anything.search_app.embed_text_query", return_value=_FAKE_EMBEDDING)
+    @patch("search_anything.search_app.search", return_value=[])
     def test_embed_text_query_called_with_correct_args(self, mock_search, mock_embed):
-        from vlmembed.search_app import make_search_fn
+        from search_anything.search_app import make_search_fn
 
         run_search = make_search_fn(
             _mock_collection(count=5),
@@ -305,10 +305,10 @@ class TestRunSearch:
             dimensions=_DIM,
         )
 
-    @patch("vlmembed.search_app.embed_text_query", return_value=_FAKE_EMBEDDING)
-    @patch("vlmembed.search_app.search")
+    @patch("search_anything.search_app.embed_text_query", return_value=_FAKE_EMBEDDING)
+    @patch("search_anything.search_app.search")
     def test_returns_gallery_items_from_results(self, mock_search, mock_embed):
-        from vlmembed.search_app import make_search_fn
+        from search_anything.search_app import make_search_fn
 
         mock_search.return_value = [_make_result(page_number=0, distance=0.1)]
         run_search = make_search_fn(_mock_collection(count=5), api_key="key", model="m", dimensions=_DIM)
@@ -324,11 +324,11 @@ class TestRunSearch:
 
 
 class TestLaunchSearchApp:
-    @patch("vlmembed.search_app.gr.Blocks.launch")
-    @patch("vlmembed.search_app.get_collection")
-    @patch("vlmembed.search_app.dotenv.load_dotenv")
+    @patch("search_anything.search_app.gr.Blocks.launch")
+    @patch("search_anything.search_app.get_collection")
+    @patch("search_anything.search_app.dotenv.load_dotenv")
     def test_calls_launch_with_port(self, mock_dotenv, mock_col, mock_launch, tmp_path):
-        from vlmembed.search_app import launch_search_app
+        from search_anything.search_app import launch_search_app
 
         mock_col.return_value = _mock_collection()
         launch_search_app(
@@ -340,21 +340,21 @@ class TestLaunchSearchApp:
         )
         mock_launch.assert_called_once_with(server_port=7890, inbrowser=True)
 
-    @patch("vlmembed.search_app.gr.Blocks.launch")
-    @patch("vlmembed.search_app.get_collection")
-    @patch("vlmembed.search_app.dotenv.load_dotenv")
+    @patch("search_anything.search_app.gr.Blocks.launch")
+    @patch("search_anything.search_app.get_collection")
+    @patch("search_anything.search_app.dotenv.load_dotenv")
     def test_reads_api_key_from_env_when_not_provided(
         self, mock_dotenv, mock_col, mock_launch, tmp_path, monkeypatch
     ):
         """When api_key is empty, GOOGLE_API_KEY env var is used instead."""
-        from vlmembed.search_app import launch_search_app, make_search_fn
+        from search_anything.search_app import launch_search_app, make_search_fn
 
         monkeypatch.setenv("GOOGLE_API_KEY", "env-key")
         col = _mock_collection()
         mock_col.return_value = col
 
-        with patch("vlmembed.search_app.embed_text_query", return_value=_FAKE_EMBEDDING) as mock_embed:
-            with patch("vlmembed.search_app.search", return_value=[]):
+        with patch("search_anything.search_app.embed_text_query", return_value=_FAKE_EMBEDDING) as mock_embed:
+            with patch("search_anything.search_app.search", return_value=[]):
                 launch_search_app(
                     embed_dir=tmp_path,
                     api_key="",
@@ -367,11 +367,11 @@ class TestLaunchSearchApp:
                 run_search("test", 1)
                 mock_embed.assert_called_with("test", model="m", api_key="env-key", dimensions=_DIM)
 
-    @patch("vlmembed.search_app.gr.Blocks.launch")
-    @patch("vlmembed.search_app.get_collection")
-    @patch("vlmembed.search_app.dotenv.load_dotenv")
+    @patch("search_anything.search_app.gr.Blocks.launch")
+    @patch("search_anything.search_app.get_collection")
+    @patch("search_anything.search_app.dotenv.load_dotenv")
     def test_load_dotenv_called(self, mock_dotenv, mock_col, mock_launch, tmp_path):
-        from vlmembed.search_app import launch_search_app
+        from search_anything.search_app import launch_search_app
 
         mock_col.return_value = _mock_collection()
         launch_search_app(embed_dir=tmp_path, api_key="k", model="m", dimensions=_DIM)
@@ -386,10 +386,10 @@ class TestLaunchSearchApp:
 class TestQueryEmbeddingCache:
     """Verify that make_search_fn skips the API when a cached embedding exists."""
 
-    @patch("vlmembed.search_app.embed_text_query", return_value=_FAKE_EMBEDDING)
-    @patch("vlmembed.search_app.search", return_value=[])
+    @patch("search_anything.search_app.embed_text_query", return_value=_FAKE_EMBEDDING)
+    @patch("search_anything.search_app.search", return_value=[])
     def test_embed_called_on_first_query(self, mock_search, mock_embed, tmp_path):
-        from vlmembed.search_app import make_search_fn
+        from search_anything.search_app import make_search_fn
 
         run_search = make_search_fn(
             _mock_collection(count=5),
@@ -401,10 +401,10 @@ class TestQueryEmbeddingCache:
         run_search("hello", 3)
         mock_embed.assert_called_once()
 
-    @patch("vlmembed.search_app.embed_text_query", return_value=_FAKE_EMBEDDING)
-    @patch("vlmembed.search_app.search", return_value=[])
+    @patch("search_anything.search_app.embed_text_query", return_value=_FAKE_EMBEDDING)
+    @patch("search_anything.search_app.search", return_value=[])
     def test_embed_not_called_on_repeat_query(self, mock_search, mock_embed, tmp_path):
-        from vlmembed.search_app import make_search_fn
+        from search_anything.search_app import make_search_fn
 
         run_search = make_search_fn(
             _mock_collection(count=5),
@@ -417,10 +417,10 @@ class TestQueryEmbeddingCache:
         run_search("hello", 3)
         mock_embed.assert_called_once()  # only the first call hits the API
 
-    @patch("vlmembed.search_app.embed_text_query", return_value=_FAKE_EMBEDDING)
-    @patch("vlmembed.search_app.search", return_value=[])
+    @patch("search_anything.search_app.embed_text_query", return_value=_FAKE_EMBEDDING)
+    @patch("search_anything.search_app.search", return_value=[])
     def test_cache_is_case_insensitive(self, mock_search, mock_embed, tmp_path):
-        from vlmembed.search_app import make_search_fn
+        from search_anything.search_app import make_search_fn
 
         run_search = make_search_fn(
             _mock_collection(count=5),
@@ -433,10 +433,10 @@ class TestQueryEmbeddingCache:
         run_search("hello", 3)
         mock_embed.assert_called_once()
 
-    @patch("vlmembed.search_app.embed_text_query", return_value=_FAKE_EMBEDDING)
-    @patch("vlmembed.search_app.search", return_value=[])
+    @patch("search_anything.search_app.embed_text_query", return_value=_FAKE_EMBEDDING)
+    @patch("search_anything.search_app.search", return_value=[])
     def test_cache_ignores_punctuation(self, mock_search, mock_embed, tmp_path):
-        from vlmembed.search_app import make_search_fn
+        from search_anything.search_app import make_search_fn
 
         run_search = make_search_fn(
             _mock_collection(count=5),
@@ -449,10 +449,10 @@ class TestQueryEmbeddingCache:
         run_search("cats", 3)
         mock_embed.assert_called_once()
 
-    @patch("vlmembed.search_app.embed_text_query", return_value=_FAKE_EMBEDDING)
-    @patch("vlmembed.search_app.search", return_value=[])
+    @patch("search_anything.search_app.embed_text_query", return_value=_FAKE_EMBEDDING)
+    @patch("search_anything.search_app.search", return_value=[])
     def test_different_queries_each_call_api(self, mock_search, mock_embed, tmp_path):
-        from vlmembed.search_app import make_search_fn
+        from search_anything.search_app import make_search_fn
 
         run_search = make_search_fn(
             _mock_collection(count=5),
@@ -465,10 +465,10 @@ class TestQueryEmbeddingCache:
         run_search("world", 3)
         assert mock_embed.call_count == 2
 
-    @patch("vlmembed.search_app.embed_text_query", return_value=_FAKE_EMBEDDING)
-    @patch("vlmembed.search_app.search", return_value=[])
+    @patch("search_anything.search_app.embed_text_query", return_value=_FAKE_EMBEDDING)
+    @patch("search_anything.search_app.search", return_value=[])
     def test_no_embed_dir_disables_caching(self, mock_search, mock_embed, tmp_path):
-        from vlmembed.search_app import make_search_fn
+        from search_anything.search_app import make_search_fn
 
         run_search = make_search_fn(
             _mock_collection(count=5),
@@ -481,10 +481,10 @@ class TestQueryEmbeddingCache:
         run_search("hello", 3)
         assert mock_embed.call_count == 2  # no cache → two API calls
 
-    @patch("vlmembed.search_app.embed_text_query", return_value=_FAKE_EMBEDDING)
-    @patch("vlmembed.search_app.search", return_value=[])
+    @patch("search_anything.search_app.embed_text_query", return_value=_FAKE_EMBEDDING)
+    @patch("search_anything.search_app.search", return_value=[])
     def test_cache_persists_across_search_fn_instances(self, mock_search, mock_embed, tmp_path):
-        from vlmembed.search_app import make_search_fn
+        from search_anything.search_app import make_search_fn
 
         # First instance populates the cache
         run_search_1 = make_search_fn(

@@ -1,4 +1,4 @@
-"""Unit tests for vlmembed.cli."""
+"""Unit tests for search_anything.cli."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import os
 from unittest.mock import patch
 
 
-from vlmembed.cli import (
+from search_anything.cli import (
     _build_parser,
     _interactive_menu,
     _resolve_int,
@@ -19,7 +19,7 @@ from vlmembed.cli import (
     cmd_search,
     main,
 )
-from vlmembed.contract import (
+from search_anything.contract import (
     DEFAULT_DIMENSIONS,
     DEFAULT_DPI,
     DEFAULT_DOCS_DIR,
@@ -253,8 +253,8 @@ class TestCmdInit:
 class TestCmdEmbed:
     """Tests for the embed subcommand; embed_all_pdfs is always mocked."""
 
-    _PATCH = "vlmembed.embed.embed_all_pdfs"
-    _EST_PATCH = "vlmembed.cli._estimate_pending_embedding_cost"
+    _PATCH = "search_anything.embed.embed_all_pdfs"
+    _EST_PATCH = "search_anything.cli._estimate_pending_embedding_cost"
 
     _ESTIMATE_RETURN = {
         "per_file": {"a.pdf": 3},
@@ -305,116 +305,116 @@ class TestCmdEmbed:
         assert kwargs["api_key"] is None
 
     def test_cli_model_wins_over_env(self, monkeypatch):
-        monkeypatch.setenv("VLMEMBED_MODEL", "env-model")
+        monkeypatch.setenv("SEARCH_ANYTHING_MODEL", "env-model")
         args = _ns(model="cli-model")
-        _, mock_fn = self._run(args, env={"VLMEMBED_MODEL": "env-model"})
+        _, mock_fn = self._run(args, env={"SEARCH_ANYTHING_MODEL": "env-model"})
         _, kwargs = mock_fn.call_args
         assert kwargs["model"] == "cli-model"
 
     def test_env_model_used_when_no_cli_arg(self):
         args = _ns(model=None)
-        _, mock_fn = self._run(args, env={"VLMEMBED_MODEL": "env-model"})
+        _, mock_fn = self._run(args, env={"SEARCH_ANYTHING_MODEL": "env-model"})
         _, kwargs = mock_fn.call_args
         assert kwargs["model"] == "env-model"
 
     def test_default_model_when_neither_set(self):
         args = _ns(model=None)
-        env = {k: "" for k in ["VLMEMBED_MODEL"]}
+        env = {k: "" for k in ["SEARCH_ANYTHING_MODEL"]}
         _, mock_fn = self._run(args, env=env)
         _, kwargs = mock_fn.call_args
         assert kwargs["model"] == DEFAULT_MODEL
 
     def test_cli_dpi_wins_over_env(self):
         args = _ns(dpi=150)
-        _, mock_fn = self._run(args, env={"VLMEMBED_DPI": "300"})
+        _, mock_fn = self._run(args, env={"SEARCH_ANYTHING_DPI": "300"})
         _, kwargs = mock_fn.call_args
         assert kwargs["dpi"] == 150
 
     def test_env_dpi_used_when_no_cli_arg(self):
         args = _ns(dpi=None)
-        _, mock_fn = self._run(args, env={"VLMEMBED_DPI": "100"})
+        _, mock_fn = self._run(args, env={"SEARCH_ANYTHING_DPI": "100"})
         _, kwargs = mock_fn.call_args
         assert kwargs["dpi"] == 100
 
     def test_default_dpi_when_neither_set(self):
         args = _ns(dpi=None)
-        env = {"VLMEMBED_DPI": ""}
+        env = {"SEARCH_ANYTHING_DPI": ""}
         _, mock_fn = self._run(args, env=env)
         _, kwargs = mock_fn.call_args
         assert kwargs["dpi"] == DEFAULT_DPI
 
     def test_cli_image_format_wins(self):
         args = _ns(image_format="jpeg")
-        _, mock_fn = self._run(args, env={"VLMEMBED_IMAGE_FORMAT": "png"})
+        _, mock_fn = self._run(args, env={"SEARCH_ANYTHING_IMAGE_FORMAT": "png"})
         _, kwargs = mock_fn.call_args
         assert kwargs["image_format"] == "jpeg"
 
     def test_env_image_format_used(self):
         args = _ns(image_format=None)
-        _, mock_fn = self._run(args, env={"VLMEMBED_IMAGE_FORMAT": "jpeg"})
+        _, mock_fn = self._run(args, env={"SEARCH_ANYTHING_IMAGE_FORMAT": "jpeg"})
         _, kwargs = mock_fn.call_args
         assert kwargs["image_format"] == "jpeg"
 
     def test_default_image_format_fallback(self):
         args = _ns(image_format=None)
-        env = {"VLMEMBED_IMAGE_FORMAT": ""}
+        env = {"SEARCH_ANYTHING_IMAGE_FORMAT": ""}
         _, mock_fn = self._run(args, env=env)
         _, kwargs = mock_fn.call_args
         assert kwargs["image_format"] == DEFAULT_IMAGE_FORMAT
 
     def test_cli_dimensions_wins(self):
         args = _ns(dimensions=512)
-        _, mock_fn = self._run(args, env={"VLMEMBED_DIMENSIONS": "1024"})
+        _, mock_fn = self._run(args, env={"SEARCH_ANYTHING_DIMENSIONS": "1024"})
         _, kwargs = mock_fn.call_args
         assert kwargs["dimensions"] == 512
 
     def test_env_dimensions_used(self):
         args = _ns(dimensions=None)
-        _, mock_fn = self._run(args, env={"VLMEMBED_DIMENSIONS": "768"})
+        _, mock_fn = self._run(args, env={"SEARCH_ANYTHING_DIMENSIONS": "768"})
         _, kwargs = mock_fn.call_args
         assert kwargs["dimensions"] == 768
 
     def test_default_dimensions_fallback(self):
         args = _ns(dimensions=None)
-        env = {"VLMEMBED_DIMENSIONS": ""}
+        env = {"SEARCH_ANYTHING_DIMENSIONS": ""}
         _, mock_fn = self._run(args, env=env)
         _, kwargs = mock_fn.call_args
         assert kwargs["dimensions"] == DEFAULT_DIMENSIONS
 
     def test_cli_max_workers_wins(self):
         args = _ns(max_workers=2)
-        _, mock_fn = self._run(args, env={"VLMEMBED_MAX_WORKERS": "8"})
+        _, mock_fn = self._run(args, env={"SEARCH_ANYTHING_MAX_WORKERS": "8"})
         _, kwargs = mock_fn.call_args
         assert kwargs["max_workers"] == 2
 
     def test_env_max_workers_used(self):
         args = _ns(max_workers=None)
-        _, mock_fn = self._run(args, env={"VLMEMBED_MAX_WORKERS": "6"})
+        _, mock_fn = self._run(args, env={"SEARCH_ANYTHING_MAX_WORKERS": "6"})
         _, kwargs = mock_fn.call_args
         assert kwargs["max_workers"] == 6
 
     def test_default_max_workers_fallback(self):
         args = _ns(max_workers=None)
-        env = {"VLMEMBED_MAX_WORKERS": ""}
+        env = {"SEARCH_ANYTHING_MAX_WORKERS": ""}
         _, mock_fn = self._run(args, env=env)
         _, kwargs = mock_fn.call_args
         assert kwargs["max_workers"] == DEFAULT_MAX_WORKERS
 
     def test_cli_max_retries_wins(self):
         args = _ns(max_retries=1)
-        _, mock_fn = self._run(args, env={"VLMEMBED_MAX_RETRIES": "5"})
+        _, mock_fn = self._run(args, env={"SEARCH_ANYTHING_MAX_RETRIES": "5"})
         _, kwargs = mock_fn.call_args
         assert kwargs["max_retries"] == 1
 
     def test_env_max_retries_used(self):
         args = _ns(max_retries=None)
-        _, mock_fn = self._run(args, env={"VLMEMBED_MAX_RETRIES": "7"})
+        _, mock_fn = self._run(args, env={"SEARCH_ANYTHING_MAX_RETRIES": "7"})
         _, kwargs = mock_fn.call_args
         assert kwargs["max_retries"] == 7
 
     def test_default_max_retries_fallback(self):
         args = _ns(max_retries=None)
-        env = {"VLMEMBED_MAX_RETRIES": ""}
+        env = {"SEARCH_ANYTHING_MAX_RETRIES": ""}
         _, mock_fn = self._run(args, env=env)
         _, kwargs = mock_fn.call_args
         assert kwargs["max_retries"] == DEFAULT_MAX_RETRIES
@@ -466,7 +466,7 @@ class TestCmdEmbed:
 
 
 class TestCmdSearch:
-    _PATCH = "vlmembed.search_app.launch_search_app"
+    _PATCH = "search_anything.search_app.launch_search_app"
 
     def _run(self, args: argparse.Namespace, env: dict | None = None):
         env = env or {}
@@ -512,38 +512,38 @@ class TestCmdSearch:
 
     def test_cli_model_wins_over_env(self):
         args = self._search_ns(model="cli-model")
-        _, mock_fn = self._run(args, env={"VLMEMBED_MODEL": "env-model"})
+        _, mock_fn = self._run(args, env={"SEARCH_ANYTHING_MODEL": "env-model"})
         _, kwargs = mock_fn.call_args
         assert kwargs["model"] == "cli-model"
 
     def test_env_model_used_when_no_cli_arg(self):
         args = self._search_ns(model=None)
-        _, mock_fn = self._run(args, env={"VLMEMBED_MODEL": "env-model"})
+        _, mock_fn = self._run(args, env={"SEARCH_ANYTHING_MODEL": "env-model"})
         _, kwargs = mock_fn.call_args
         assert kwargs["model"] == "env-model"
 
     def test_default_model_when_neither_set(self):
         args = self._search_ns(model=None)
-        env = {"VLMEMBED_MODEL": ""}
+        env = {"SEARCH_ANYTHING_MODEL": ""}
         _, mock_fn = self._run(args, env=env)
         _, kwargs = mock_fn.call_args
         assert kwargs["model"] == DEFAULT_MODEL
 
     def test_cli_dimensions_wins(self):
         args = self._search_ns(dimensions=512)
-        _, mock_fn = self._run(args, env={"VLMEMBED_DIMENSIONS": "1024"})
+        _, mock_fn = self._run(args, env={"SEARCH_ANYTHING_DIMENSIONS": "1024"})
         _, kwargs = mock_fn.call_args
         assert kwargs["dimensions"] == 512
 
     def test_env_dimensions_used(self):
         args = self._search_ns(dimensions=None)
-        _, mock_fn = self._run(args, env={"VLMEMBED_DIMENSIONS": "768"})
+        _, mock_fn = self._run(args, env={"SEARCH_ANYTHING_DIMENSIONS": "768"})
         _, kwargs = mock_fn.call_args
         assert kwargs["dimensions"] == 768
 
     def test_default_dimensions_fallback(self):
         args = self._search_ns(dimensions=None)
-        env = {"VLMEMBED_DIMENSIONS": ""}
+        env = {"SEARCH_ANYTHING_DIMENSIONS": ""}
         _, mock_fn = self._run(args, env=env)
         _, kwargs = mock_fn.call_args
         assert kwargs["dimensions"] == DEFAULT_DIMENSIONS
@@ -567,7 +567,7 @@ class TestCmdSearch:
 
 
 class TestCmdEstimateCost:
-    _PATCH = "vlmembed.estimate_cost.estimate_cost"
+    _PATCH = "search_anything.estimate_cost.estimate_cost"
 
     def _run(self, args: argparse.Namespace, return_value: dict | None = None):
         default_return = {
@@ -689,14 +689,14 @@ class TestCmdResetStore:
 
     def test_yes_skips_prompt_and_calls_reset(self, tmp_path):
         args = self._ns(embed_dir=str(tmp_path), yes=True)
-        with patch("vlmembed.store.reset_store", return_value=[]) as mock_reset:
+        with patch("search_anything.store.reset_store", return_value=[]) as mock_reset:
             rc = cmd_reset_store(args)
         assert rc == 0
         mock_reset.assert_called_once_with(tmp_path, remove_images=True)
 
     def test_returns_zero_when_nothing_removed(self, tmp_path):
         args = self._ns(embed_dir=str(tmp_path), yes=True)
-        with patch("vlmembed.store.reset_store", return_value=[]):
+        with patch("search_anything.store.reset_store", return_value=[]):
             rc = cmd_reset_store(args)
         assert rc == 0
 
@@ -708,57 +708,57 @@ class TestCmdResetStore:
 
 class TestMain:
     def test_no_args_triggers_interactive_menu(self):
-        with patch("vlmembed.cli._interactive_menu", return_value=0) as mock_menu:
+        with patch("search_anything.cli._interactive_menu", return_value=0) as mock_menu:
             rc = main([])
         mock_menu.assert_called_once()
         assert rc == 0
 
     def test_init_routed_correctly(self, tmp_path):
-        with patch("vlmembed.cli.cmd_init", return_value=0) as mock_cmd:
+        with patch("search_anything.cli.cmd_init", return_value=0) as mock_cmd:
             rc = main(["init"])
         mock_cmd.assert_called_once()
         assert rc == 0
 
     def test_embed_routed_correctly(self):
-        with patch("vlmembed.cli.cmd_embed", return_value=0) as mock_cmd:
+        with patch("search_anything.cli.cmd_embed", return_value=0) as mock_cmd:
             rc = main(["embed"])
         mock_cmd.assert_called_once()
         assert rc == 0
 
     def test_search_routed_correctly(self):
-        with patch("vlmembed.cli.cmd_search", return_value=0) as mock_cmd:
+        with patch("search_anything.cli.cmd_search", return_value=0) as mock_cmd:
             rc = main(["search"])
         mock_cmd.assert_called_once()
         assert rc == 0
 
     def test_estimate_cost_routed_correctly(self):
-        with patch("vlmembed.cli.cmd_estimate_cost", return_value=0) as mock_cmd:
+        with patch("search_anything.cli.cmd_estimate_cost", return_value=0) as mock_cmd:
             rc = main(["estimate-cost"])
         mock_cmd.assert_called_once()
         assert rc == 0
 
     def test_reset_store_routed_correctly(self):
-        with patch("vlmembed.cli.cmd_reset_store", return_value=0) as mock_cmd:
+        with patch("search_anything.cli.cmd_reset_store", return_value=0) as mock_cmd:
             rc = main(["reset-store"])
         mock_cmd.assert_called_once()
         assert rc == 0
 
     def test_init_passes_parsed_namespace(self, tmp_path):
-        with patch("vlmembed.cli.cmd_init", return_value=0) as mock_cmd:
+        with patch("search_anything.cli.cmd_init", return_value=0) as mock_cmd:
             main(["init", "--docs-dir", str(tmp_path / "d"), "--embed-dir", str(tmp_path / "e")])
         args = mock_cmd.call_args[0][0]
         assert args.docs_dir == str(tmp_path / "d")
         assert args.embed_dir == str(tmp_path / "e")
 
     def test_embed_passes_parsed_flags(self):
-        with patch("vlmembed.cli.cmd_embed", return_value=0) as mock_cmd:
+        with patch("search_anything.cli.cmd_embed", return_value=0) as mock_cmd:
             main(["embed", "--dpi", "150", "--api-key", "k"])
         args = mock_cmd.call_args[0][0]
         assert args.dpi == 150
         assert args.api_key == "k"
 
     def test_search_passes_port(self):
-        with patch("vlmembed.cli.cmd_search", return_value=0) as mock_cmd:
+        with patch("search_anything.cli.cmd_search", return_value=0) as mock_cmd:
             main(["search", "--port", "9999"])
         args = mock_cmd.call_args[0][0]
         assert args.port == 9999
@@ -794,14 +794,14 @@ class TestInteractiveMenu:
     def test_choice_1_calls_cmd_init(self):
         inputs = iter(["1", "5"])
         with patch("builtins.input", side_effect=inputs):
-            with patch("vlmembed.cli.cmd_init", return_value=0) as mock_init:
+            with patch("search_anything.cli.cmd_init", return_value=0) as mock_init:
                 _interactive_menu()
         mock_init.assert_called_once()
 
     def test_choice_2_calls_cmd_embed(self):
         inputs = iter(["2", "5"])
         with patch("builtins.input", side_effect=inputs):
-            with patch("vlmembed.cli.cmd_embed", return_value=0) as mock_embed:
+            with patch("search_anything.cli.cmd_embed", return_value=0) as mock_embed:
                 with patch("dotenv.load_dotenv"):
                     _interactive_menu()
         mock_embed.assert_called_once()
@@ -809,7 +809,7 @@ class TestInteractiveMenu:
     def test_choice_3_calls_cmd_search(self):
         inputs = iter(["3", "5"])
         with patch("builtins.input", side_effect=inputs):
-            with patch("vlmembed.cli.cmd_search", return_value=0) as mock_search:
+            with patch("search_anything.cli.cmd_search", return_value=0) as mock_search:
                 with patch("dotenv.load_dotenv"):
                     _interactive_menu()
         mock_search.assert_called_once()
@@ -817,6 +817,6 @@ class TestInteractiveMenu:
     def test_choice_4_calls_cmd_estimate_cost(self):
         inputs = iter(["4", "5"])
         with patch("builtins.input", side_effect=inputs):
-            with patch("vlmembed.cli.cmd_estimate_cost", return_value=0) as mock_est:
+            with patch("search_anything.cli.cmd_estimate_cost", return_value=0) as mock_est:
                 _interactive_menu()
         mock_est.assert_called_once()

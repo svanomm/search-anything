@@ -1,10 +1,10 @@
-"""Tests for vlmembed.contract."""
+"""Tests for search_anything.contract."""
 
 from pathlib import Path
 
 import pytest
 
-from vlmembed.contract import (
+from search_anything.contract import (
     DEFAULT_DIMENSIONS,
     DEFAULT_DPI,
     DEFAULT_DOCS_DIR,
@@ -78,22 +78,22 @@ class TestEnvVarNames:
         assert ENV_USE_ENTERPRISE == "GOOGLE_GENAI_USE_ENTERPRISE"
 
     def test_model(self):
-        assert ENV_MODEL == "VLMEMBED_MODEL"
+        assert ENV_MODEL == "SEARCH_ANYTHING_MODEL"
 
     def test_dpi(self):
-        assert ENV_DPI == "VLMEMBED_DPI"
+        assert ENV_DPI == "SEARCH_ANYTHING_DPI"
 
     def test_image_format(self):
-        assert ENV_IMAGE_FORMAT == "VLMEMBED_IMAGE_FORMAT"
+        assert ENV_IMAGE_FORMAT == "SEARCH_ANYTHING_IMAGE_FORMAT"
 
     def test_dimensions(self):
-        assert ENV_DIMENSIONS == "VLMEMBED_DIMENSIONS"
+        assert ENV_DIMENSIONS == "SEARCH_ANYTHING_DIMENSIONS"
 
     def test_max_workers(self):
-        assert ENV_MAX_WORKERS == "VLMEMBED_MAX_WORKERS"
+        assert ENV_MAX_WORKERS == "SEARCH_ANYTHING_MAX_WORKERS"
 
     def test_max_retries(self):
-        assert ENV_MAX_RETRIES == "VLMEMBED_MAX_RETRIES"
+        assert ENV_MAX_RETRIES == "SEARCH_ANYTHING_MAX_RETRIES"
 
 
 class TestPathHelpers:

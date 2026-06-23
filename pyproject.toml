@@ -19,10 +19,10 @@ dependencies = [
 ]
 
 [project.scripts]
-search = "vlmembed.cli:main"
+search = "search_anything.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/vlmembed"]
+packages = ["src/search_anything"]
 
 [tool.uv]
 package = true

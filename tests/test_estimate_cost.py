@@ -1,4 +1,4 @@
-"""Unit tests for vlmembed.estimate_cost."""
+"""Unit tests for search_anything.estimate_cost."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import fitz
 
-from vlmembed.estimate_cost import (
+from search_anything.estimate_cost import (
     _PRICE_PER_M_TOKENS,
     count_multimodal_inputs,
     count_pdf_pages,
@@ -104,7 +104,7 @@ class TestEstimateTokensPerPage:
         assert result >= 1
 
     def test_default_dpi(self):
-        from vlmembed.contract import DEFAULT_DPI
+        from search_anything.contract import DEFAULT_DPI
 
         assert estimate_tokens_per_page() == estimate_tokens_per_page(dpi=DEFAULT_DPI)
 
@@ -265,7 +265,7 @@ class TestEstimateCost:
         import inspect
 
         sig = inspect.signature(estimate_cost)
-        from vlmembed.contract import DEFAULT_DOCS_DIR as _DEFAULT
+        from search_anything.contract import DEFAULT_DOCS_DIR as _DEFAULT
 
         assert sig.parameters["docs_dir"].default == _DEFAULT
 
