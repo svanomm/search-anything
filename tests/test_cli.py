@@ -119,7 +119,9 @@ class TestBuildParser:
         assert args.embed_dir == str(DEFAULT_EMBED_DIR)
 
     def test_init_custom_dirs(self):
-        args = self.parser.parse_args(["init", "--docs-dir", "my_docs", "--embed-dir", "my_emb"])
+        args = self.parser.parse_args(
+            ["init", "--docs-dir", "my_docs", "--embed-dir", "my_emb"]
+        )
         assert args.docs_dir == "my_docs"
         assert args.embed_dir == "my_emb"
 
@@ -137,17 +139,26 @@ class TestBuildParser:
         assert args.max_retries is None
 
     def test_embed_accepts_all_flags(self):
-        args = self.parser.parse_args([
-            "embed",
-            "--api-key", "key123",
-            "--model", "mymodel",
-            "--dpi", "150",
-            "--format", "jpeg",
-            "--dimensions", "512",
-            "--max-workers", "2",
-            "--max-retries", "1",
-            "--yes",
-        ])
+        args = self.parser.parse_args(
+            [
+                "embed",
+                "--api-key",
+                "key123",
+                "--model",
+                "mymodel",
+                "--dpi",
+                "150",
+                "--format",
+                "jpeg",
+                "--dimensions",
+                "512",
+                "--max-workers",
+                "2",
+                "--max-retries",
+                "1",
+                "--yes",
+            ]
+        )
         assert args.api_key == "key123"
         assert args.model == "mymodel"
         assert args.dpi == 150
@@ -708,7 +719,9 @@ class TestCmdResetStore:
 
 class TestMain:
     def test_no_args_triggers_interactive_menu(self):
-        with patch("search_anything.cli._interactive_menu", return_value=0) as mock_menu:
+        with patch(
+            "search_anything.cli._interactive_menu", return_value=0
+        ) as mock_menu:
             rc = main([])
         mock_menu.assert_called_once()
         assert rc == 0
@@ -745,7 +758,15 @@ class TestMain:
 
     def test_init_passes_parsed_namespace(self, tmp_path):
         with patch("search_anything.cli.cmd_init", return_value=0) as mock_cmd:
-            main(["init", "--docs-dir", str(tmp_path / "d"), "--embed-dir", str(tmp_path / "e")])
+            main(
+                [
+                    "init",
+                    "--docs-dir",
+                    str(tmp_path / "d"),
+                    "--embed-dir",
+                    str(tmp_path / "e"),
+                ]
+            )
         args = mock_cmd.call_args[0][0]
         assert args.docs_dir == str(tmp_path / "d")
         assert args.embed_dir == str(tmp_path / "e")
@@ -817,6 +838,8 @@ class TestInteractiveMenu:
     def test_choice_4_calls_cmd_estimate_cost(self):
         inputs = iter(["4", "5"])
         with patch("builtins.input", side_effect=inputs):
-            with patch("search_anything.cli.cmd_estimate_cost", return_value=0) as mock_est:
+            with patch(
+                "search_anything.cli.cmd_estimate_cost", return_value=0
+            ) as mock_est:
                 _interactive_menu()
         mock_est.assert_called_once()

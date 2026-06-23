@@ -404,7 +404,9 @@ class TestGetSetCachedEmbedding:
         assert result is None
 
     def test_set_returns_updated_cache(self, tmp_path):
-        cache = set_cached_embedding(tmp_path, "hello", self._MODEL, self._DIM, self._EMB)
+        cache = set_cached_embedding(
+            tmp_path, "hello", self._MODEL, self._DIM, self._EMB
+        )
         assert isinstance(cache, dict)
         assert len(cache) == 1
 

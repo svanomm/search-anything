@@ -97,11 +97,15 @@ class TestComputeSettingsHash:
         assert len(result) == 64
 
     def test_is_deterministic(self):
-        assert compute_settings_hash(**self._BASE) == compute_settings_hash(**self._BASE)
+        assert compute_settings_hash(**self._BASE) == compute_settings_hash(
+            **self._BASE
+        )
 
     def test_matches_manual_sha256(self):
         settings = {"dimensions": 3072, "dpi": 200, "image_format": "png", "model": "m"}
-        serialized = json.dumps(settings, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+        serialized = json.dumps(
+            settings, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+        )
         expected = hashlib.sha256(serialized.encode("utf-8")).hexdigest()
         assert compute_settings_hash(**self._BASE) == expected
 
@@ -428,9 +432,7 @@ class TestEmbedAllPdfs:
         mock_exists.return_value = True  # All pages already in store
 
         with patch("search_anything.embed.dotenv.load_dotenv"):
-            result = embed_all_pdfs(
-                docs_dir, tmp_path / "embed", api_key="testkey"
-            )
+            result = embed_all_pdfs(docs_dir, tmp_path / "embed", api_key="testkey")
 
         assert result == []
         mock_upsert.assert_not_called()
@@ -737,7 +739,9 @@ class TestEmbedAllPdfs:
         assert results[0]["metadata"]["doc_path"].endswith("nested.pdf")
         assert mock_upsert.call_count == 1
 
-    @patch("search_anything.embed._chunk_text_file", return_value=["chunk 1", "chunk 2"])
+    @patch(
+        "search_anything.embed._chunk_text_file", return_value=["chunk 1", "chunk 2"]
+    )
     @patch("search_anything.store.get_collection")
     @patch("search_anything.store.page_exists")
     @patch("search_anything.store.upsert_page")

@@ -193,7 +193,9 @@ def cmd_embed(args: argparse.Namespace) -> int:
     api_key = _resolve_str(args.api_key, ENV_API_KEY, "")
     model = _resolve_str(args.model, ENV_MODEL, DEFAULT_MODEL)
     dpi = _resolve_int(args.dpi, ENV_DPI, DEFAULT_DPI)
-    image_format = _resolve_str(args.image_format, ENV_IMAGE_FORMAT, DEFAULT_IMAGE_FORMAT)
+    image_format = _resolve_str(
+        args.image_format, ENV_IMAGE_FORMAT, DEFAULT_IMAGE_FORMAT
+    )
     dimensions = _resolve_int(args.dimensions, ENV_DIMENSIONS, DEFAULT_DIMENSIONS)
     max_workers = _resolve_int(args.max_workers, ENV_MAX_WORKERS, DEFAULT_MAX_WORKERS)
     max_retries = _resolve_int(args.max_retries, ENV_MAX_RETRIES, DEFAULT_MAX_RETRIES)
@@ -318,9 +320,7 @@ def cmd_estimate_cost(args: argparse.Namespace) -> int:
     for modality in ("pdf", "image", "text", "audio", "video"):
         tokens = token_breakdown.get(modality, 0)
         cost = per_modality_usd.get(modality, 0.0)
-        print(
-            f"    {modality:>5}: {_BOLD}{tokens:,}{_R} tokens (~${cost:.4f})"
-        )
+        print(f"    {modality:>5}: {_BOLD}{tokens:,}{_R} tokens (~${cost:.4f})")
 
     print(f"\n  Total tokens:    {_BOLD}{result['total_tokens']:,}{_R}")
     print(f"  Estimated cost:  {_BOLD}{_GREEN}${result['estimated_usd']:.4f}{_R}")
@@ -520,7 +520,9 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     # --- estimate-cost ---
-    p_est = sub.add_parser("estimate-cost", help="Estimate embedding cost for PDFs in docs/.")
+    p_est = sub.add_parser(
+        "estimate-cost", help="Estimate embedding cost for PDFs in docs/."
+    )
     p_est.add_argument("--docs-dir", default=str(DEFAULT_DOCS_DIR))
     p_est.add_argument(
         "--dpi",

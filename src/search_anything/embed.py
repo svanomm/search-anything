@@ -167,7 +167,11 @@ def _chunk_text_content(text: str) -> list[str]:
                 min_characters_per_chunk=24,
             )
 
-        raw_chunks = chunker.chunk(clean_text) if hasattr(chunker, "chunk") else chunker(clean_text)
+        raw_chunks = (
+            chunker.chunk(clean_text)
+            if hasattr(chunker, "chunk")
+            else chunker(clean_text)
+        )
         for raw_chunk in raw_chunks:
             if isinstance(raw_chunk, str):
                 value = raw_chunk
@@ -734,9 +738,7 @@ def embed_all_pdfs(
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {executor.submit(_embed_task, task): task for task in pending}
-        with tqdm(
-            total=len(pending), desc="Embedding tasks", leave=False
-        ) as pbar:
+        with tqdm(total=len(pending), desc="Embedding tasks", leave=False) as pbar:
             for future in as_completed(futures):
                 result = future.result()  # re-raises any RuntimeError from _embed_task
                 _store.upsert_page(

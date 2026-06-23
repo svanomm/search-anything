@@ -259,7 +259,9 @@ class TestRunSearch:
     def test_empty_query_returns_no_results(self, mock_search, mock_embed):
         from search_anything.search_app import make_search_fn
 
-        run_search = make_search_fn(_mock_collection(count=5), api_key="key", model="m", dimensions=_DIM)
+        run_search = make_search_fn(
+            _mock_collection(count=5), api_key="key", model="m", dimensions=_DIM
+        )
         result = run_search("   ", 5)
         assert result == []
         mock_embed.assert_not_called()
@@ -269,7 +271,9 @@ class TestRunSearch:
     def test_empty_collection_returns_no_results(self, mock_search, mock_embed):
         from search_anything.search_app import make_search_fn
 
-        run_search = make_search_fn(_mock_collection(count=0), api_key="key", model="m", dimensions=_DIM)
+        run_search = make_search_fn(
+            _mock_collection(count=0), api_key="key", model="m", dimensions=_DIM
+        )
         result = run_search("find something", 5)
         assert result == []
         mock_embed.assert_not_called()
@@ -281,9 +285,13 @@ class TestRunSearch:
         from search_anything.search_app import make_search_fn
 
         mock_search.return_value = [_make_result(page_number=i) for i in range(3)]
-        run_search = make_search_fn(_mock_collection(count=3), api_key="key", model="m", dimensions=_DIM)
+        run_search = make_search_fn(
+            _mock_collection(count=3), api_key="key", model="m", dimensions=_DIM
+        )
         run_search("query", n_results=10)
-        call_n = mock_search.call_args[1].get("n_results") or mock_search.call_args[0][2]
+        call_n = (
+            mock_search.call_args[1].get("n_results") or mock_search.call_args[0][2]
+        )
         assert call_n <= 3
 
     @patch("search_anything.search_app.embed_text_query", return_value=_FAKE_EMBEDDING)
@@ -311,7 +319,9 @@ class TestRunSearch:
         from search_anything.search_app import make_search_fn
 
         mock_search.return_value = [_make_result(page_number=0, distance=0.1)]
-        run_search = make_search_fn(_mock_collection(count=5), api_key="key", model="m", dimensions=_DIM)
+        run_search = make_search_fn(
+            _mock_collection(count=5), api_key="key", model="m", dimensions=_DIM
+        )
         items = run_search("find page", 5)
         assert len(items) == 1
         _, caption = items[0]
@@ -353,7 +363,9 @@ class TestLaunchSearchApp:
         col = _mock_collection()
         mock_col.return_value = col
 
-        with patch("search_anything.search_app.embed_text_query", return_value=_FAKE_EMBEDDING) as mock_embed:
+        with patch(
+            "search_anything.search_app.embed_text_query", return_value=_FAKE_EMBEDDING
+        ) as mock_embed:
             with patch("search_anything.search_app.search", return_value=[]):
                 launch_search_app(
                     embed_dir=tmp_path,
@@ -363,9 +375,13 @@ class TestLaunchSearchApp:
                     port=7860,
                 )
                 # Verify the key was picked up: call make_search_fn with env key and exercise it
-                run_search = make_search_fn(col, api_key="env-key", model="m", dimensions=_DIM)
+                run_search = make_search_fn(
+                    col, api_key="env-key", model="m", dimensions=_DIM
+                )
                 run_search("test", 1)
-                mock_embed.assert_called_with("test", model="m", api_key="env-key", dimensions=_DIM)
+                mock_embed.assert_called_with(
+                    "test", model="m", api_key="env-key", dimensions=_DIM
+                )
 
     @patch("search_anything.search_app.gr.Blocks.launch")
     @patch("search_anything.search_app.get_collection")
@@ -483,7 +499,9 @@ class TestQueryEmbeddingCache:
 
     @patch("search_anything.search_app.embed_text_query", return_value=_FAKE_EMBEDDING)
     @patch("search_anything.search_app.search", return_value=[])
-    def test_cache_persists_across_search_fn_instances(self, mock_search, mock_embed, tmp_path):
+    def test_cache_persists_across_search_fn_instances(
+        self, mock_search, mock_embed, tmp_path
+    ):
         from search_anything.search_app import make_search_fn
 
         # First instance populates the cache
@@ -506,4 +524,3 @@ class TestQueryEmbeddingCache:
         )
         run_search_2("hello", 3)
         mock_embed.assert_called_once()  # only the very first call ever hits the API
-

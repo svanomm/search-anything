@@ -70,6 +70,7 @@ class TestDefaults:
     def test_schema_version(self):
         assert STORE_SCHEMA_VERSION == "2"
 
+
 class TestEnvVarNames:
     def test_api_key(self):
         assert ENV_API_KEY == "GOOGLE_API_KEY"

@@ -113,7 +113,9 @@ def _make_placeholder_tile(metadata: dict, modality: str):
     return image
 
 
-def _make_caption(metadata: dict, distance: float, *, modality: str | None = None) -> str:
+def _make_caption(
+    metadata: dict, distance: float, *, modality: str | None = None
+) -> str:
     """Format a result caption from metadata and cosine distance."""
     modality = modality or _detect_modality(metadata)
     filename = Path(metadata.get("doc_path", "unknown")).name
@@ -181,9 +183,7 @@ def make_search_fn(
         safe_n = min(int(n_results), count)
 
         if embed_dir is not None:
-            query_embedding = get_cached_embedding(
-                embed_dir, query, model, dimensions
-            )
+            query_embedding = get_cached_embedding(embed_dir, query, model, dimensions)
         else:
             query_embedding = None
 
@@ -242,7 +242,9 @@ def build_search_app(
     )
 
     with gr.Blocks(title="search_anything — PDF Semantic Search") as demo:
-        gr.Markdown("# PDF Semantic Search\nEnter a text query to find the most relevant PDF pages.")
+        gr.Markdown(
+            "# PDF Semantic Search\nEnter a text query to find the most relevant PDF pages."
+        )
 
         with gr.Row(equal_height=True):
             with gr.Column(scale=1, min_width=320):
